@@ -153,3 +153,22 @@ pica stop
 ## License
 
 Pica is released under the [**GPL-3.0 license**](LICENSE).
+
+To generate a JWT token for local development, run:
+
+```sh
+node generate-jwt.js
+```
+
+To build the `connections-api` docker image after making changes to the `api` directory, run:
+
+```sh
+docker buildx build -t connections-api:local -f api/Dockerfile .
+```
+
+To run the `connections-api` docker container, run:
+
+```sh
+docker compose up -d
+```
+

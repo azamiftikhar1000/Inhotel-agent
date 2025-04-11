@@ -3,8 +3,10 @@ pub const CONFIG_FILE_NAME: &str = "credentials.toml";
 pub const CONFIG_FILE_PATH: &str = ".pica";
 pub const DEFAULT_LIMIT: u32 = 10;
 pub const HEADER_SECRET_KEY: &str = "x-pica-secret";
-pub const DEFAULT_API: &str = "https://api.picaos.com";
-pub const DEFAULT_BASE: &str = "https://app.picaos.com";
+// pub const DEFAULT_API: &str = "https://api.picaos.com";
+// pub const DEFAULT_BASE: &str = "https://app.picaos.com";
+pub const DEFAULT_API: &str = "http://localhost:3005";
+pub const DEFAULT_BASE: &str = "http://localhost:3001";
 pub const DEFAULT_PORT: u64 = 30000;
 
 // Error messages
