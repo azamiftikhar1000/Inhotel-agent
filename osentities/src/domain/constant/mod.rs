@@ -46,7 +46,8 @@ pub const HASH_PREFIX: &str = "\x19Event Signed Message:\n";
 pub const EVENT_VERSION: &str = "v1";
 
 // OpenAPI constants
-pub const URI: &str = "https://api.picaos.com/v1/unified";
+// pub const URI: &str = "https://api.picaos.com/v1/unified";
+pub const URI: &str = "http://localhost:3005/v1/unified";
 pub const OPENAPI_VERSION: &str = "3.0.3";
 pub const SPEC_VERSION: &str = "1.0.0";
 pub const TITLE: &str = "Common Models";

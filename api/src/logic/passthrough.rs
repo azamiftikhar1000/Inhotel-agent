@@ -73,10 +73,8 @@ pub async fn passthrough_request(
     )
     .await?;
 
-    let id = headers
-        .get(QUERY_BY_ID_PASSTHROUGH)
-        .and_then(|h| h.to_str().ok());
-
+    let id_header = headers.get(QUERY_BY_ID_PASSTHROUGH);
+    let id = id_header.and_then(|h| h.to_str().ok());
     let id_str = id.map(|i| i.to_string());
 
     info!("Executing {} request on {}", method, uri.path());
@@ -96,6 +94,21 @@ pub async fn passthrough_request(
     headers.remove(&state.config.headers.auth_header);
     headers.remove(&state.config.headers.connection_header);
 
+    // Add debugging logs before making the request
+    println!("DIAGNOSTIC PASSTHROUGH: About to dispatch request");
+    println!("DIAGNOSTIC PASSTHROUGH: Connection ID: {}", connection.id);
+    println!("DIAGNOSTIC PASSTHROUGH: Platform: {}", connection.platform);
+    println!("DIAGNOSTIC PASSTHROUGH: URI Path: {}", uri.path());
+    println!("DIAGNOSTIC PASSTHROUGH: Method: {}", method);
+    println!("DIAGNOSTIC PASSTHROUGH: Headers count: {}", headers.len());
+    println!("DIAGNOSTIC PASSTHROUGH: Query params: {:?}", query_params);
+
+    // If there's an ID, log it
+    if let Some(id_val) = id_str.as_ref() {
+        println!("DIAGNOSTIC PASSTHROUGH: ID from header: {}", id_val);
+    }
+
+    // Now make the request
     let model_execution_result = state
         .extractor_caller
         .dispatch_destination_request(
@@ -107,6 +120,10 @@ pub async fn passthrough_request(
         )
         .await
         .map_err(|e| {
+            // Log more details about the error
+            println!("DIAGNOSTIC PASSTHROUGH ERROR: {}", e);
+            println!("DIAGNOSTIC PASSTHROUGH ERROR TYPE: {}", std::any::type_name_of_val(&e));
+            
             error!("Failed to execute connection model definition in passthrough endpoint. ID: {}, Error: {}", connection.id, e);
 
             e
