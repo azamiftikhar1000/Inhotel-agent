@@ -19,7 +19,7 @@ pub fn match_route<'a>(
             .all(|(route_seg, path_seg)| {
                 route_seg == path_seg
                     || route_seg.starts_with(':')
-                    || (route_seg.starts_with("{{") && route_seg.ends_with("}}"))
+                    || (route_seg.starts_with('{') && route_seg.ends_with('}'))
             })
         {
             return Some(route);
@@ -43,7 +43,7 @@ pub fn template_route(model_definition_path: String, full_request_path: String) 
     let mut template = String::new();
 
     for (i, segment) in model_definition_segments.iter().enumerate() {
-        if segment.starts_with(':') || (segment.starts_with("{{") && segment.ends_with("}}")) {
+        if segment.starts_with(':') || (segment.starts_with('{') && segment.ends_with('}')) {
             template.push_str(full_request_segments[i]);
         } else {
             template.push_str(segment);

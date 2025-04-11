@@ -3,6 +3,7 @@ pub mod connection_definition;
 pub mod connection_model_definition;
 pub mod connection_model_schema;
 pub mod connection_oauth_definition;
+pub mod connection_variable_mapping;
 
 use super::{
     configuration::environment::Environment,

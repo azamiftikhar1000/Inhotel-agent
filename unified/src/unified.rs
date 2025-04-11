@@ -26,6 +26,9 @@ use osentities::{
     api_model_config::{ModelPaths, RequestModelPaths},
     connection_model_definition::{ConnectionModelDefinition, CrudAction, PlatformInfo},
     connection_model_schema::ConnectionModelSchema,
+    connection_variable_mapping::{
+        ConnectionVariableMapping, InjectionStrategy, ParameterLocation, VariableDataType,
+    },
     constant::*,
     database::DatabaseConfig,
     destination::{Action, Destination},
@@ -61,6 +64,7 @@ pub struct UnifiedDestination {
     pub connection_model_definitions_store: MongoStore<ConnectionModelDefinition>,
     pub connection_model_schemas_cache: ConnectionModelSchemaCache,
     pub connection_model_schemas_store: MongoStore<ConnectionModelSchema>,
+    pub connection_variable_mappings_store: MongoStore<ConnectionVariableMapping>,
     pub secrets_client: Arc<dyn SecretExt + Sync + Send>,
     pub secrets_cache: SecretCache,
     pub http_client: reqwest::Client,
@@ -109,6 +113,8 @@ impl UnifiedDestination {
             MongoStore::new(&db, &Store::ConnectionModelDefinitions).await?;
         let connection_model_schemas_store =
             MongoStore::new(&db, &Store::ConnectionModelSchemas).await?;
+        let connection_variable_mappings_store =
+            MongoStore::new(&db, &Store::ConnectionVariableMappings).await?;
 
         Ok(Self {
             connections_cache,
@@ -117,6 +123,7 @@ impl UnifiedDestination {
             connection_model_definitions_store,
             connection_model_schemas_cache,
             connection_model_schemas_store,
+            connection_variable_mappings_store,
             secrets_client,
             secrets_cache,
             http_client,
@@ -592,24 +599,169 @@ impl UnifiedDestination {
             })
             .await?;
 
+        let secret_value = secret.as_value()?;
+
+
+
+        let stored_mapping = self
+            .connection_variable_mappings_store
+            .get_many(
+                Some(doc! {
+                    // Lookup by model definition only (Platform Level)
+                    "connectionModelDefinitionId": config.id.to_string(),
+                }),
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?
+            .first()
+            .cloned();
+
+        let (mut headers, mut query_params, mut context) = (headers, query_params, context);
+        // We might need to modify the config (path), so we unwrap the Arc or clone
+        let mut config = config.as_ref().clone();
+
+        if let Some(mapping) = stored_mapping {
+
+            for binding in mapping.bindings {
+                // Extract variable value from secret
+                // Extract variable value from secret
+                // Extract variable value from secret
+                let variable_value = if let Some(payload) = secret_value.get("OAUTH_REQUEST_PAYLOAD") {
+                    payload
+                        .get("formData")
+                        .and_then(|fd| fd.get(&binding.variable_name))
+                } else if let Some(fd) = secret_value.get("auth_form_data") {
+                    fd.get(&binding.variable_name)
+                } else {
+                    secret_value.get(&binding.variable_name)
+                };
+
+                if let Some(val) = variable_value {
+                    let mut target_value_json = match binding.data_type {
+                        VariableDataType::String => json!(val.as_str().map(|x| x.to_string()).unwrap_or_else(|| val.to_string())),
+                        VariableDataType::Number => {
+                            let s = val.as_str().map(|x| x.to_string()).unwrap_or_else(|| val.to_string());
+                            if let Ok(n) = s.parse::<i64>() {
+                                json!(n)
+                            } else if let Ok(n) = s.parse::<f64>() {
+                                json!(n)
+                            } else {
+                                json!(s)
+                            }
+                        },
+                        VariableDataType::Boolean => {
+                             let s = val.as_str().map(|x| x.to_string()).unwrap_or_else(|| val.to_string());
+                             json!(s.parse::<bool>().unwrap_or(false))
+                        },
+                        VariableDataType::Json => {
+                             // Assuming the secret value is JSON-compatible or a raw object.
+                             // If it's a string representation of JSON, parse it.
+                             let s = val.as_str().unwrap_or("");
+                             serde_json::from_str(s).unwrap_or_else(|_| val.clone())
+                        }
+                    };
+
+                    match binding.location {
+                        ParameterLocation::PathParam => {
+                             let s = target_value_json.as_str().map(|x| x.to_string()).unwrap_or_else(|| target_value_json.to_string());
+                             let PlatformInfo::Api(ref mut api_config) = config.platform_info;
+                             // Path Params usually always overwrite (Strict) due to resource identity.
+                             api_config.path = api_config.path.replace(&format!("{{{}}}", binding.target_param), &s);
+                        }
+                        ParameterLocation::QueryParam => {
+                             let s_val = target_value_json.as_str().map(|x| x.to_string()).unwrap_or_else(|| target_value_json.to_string());
+                             match binding.strategy {
+                                 InjectionStrategy::Strict => { query_params.insert(binding.target_param, s_val); },
+                                 InjectionStrategy::Fallback => { query_params.entry(binding.target_param).or_insert(s_val); },
+                                 InjectionStrategy::Append => {
+                                     query_params.entry(binding.target_param)
+                                         .and_modify(|existing| *existing = format!("{},{}", existing, s_val))
+                                         .or_insert(s_val);
+                                 }
+                             }
+                        }
+                        ParameterLocation::Header => {
+                             if let Ok(header_name) = HeaderName::from_str(&binding.target_param) {
+                                 let s_val = target_value_json.as_str().map(|x| x.to_string()).unwrap_or_else(|| target_value_json.to_string());
+                                 
+                                 if let Ok(header_value) = HeaderValue::from_str(&s_val) {
+                                     match binding.strategy {
+                                         InjectionStrategy::Strict => { headers.insert(header_name, header_value); },
+                                         InjectionStrategy::Fallback => { if !headers.contains_key(&header_name) { headers.insert(header_name, header_value); } },
+                                         InjectionStrategy::Append => {
+                                             // Headers support multiple values, but reqwest HeaderMap treats them as list?
+                                             // Or we append to string value?
+                                             // For robustness, comma-append string value.
+                                             if let Some(existing) = headers.get_mut(&header_name) {
+                                                 if let Ok(existing_str) = existing.to_str() {
+                                                     let new_val_str = format!("{},{}", existing_str, s_val);
+                                                      if let Ok(new_header_val) = HeaderValue::from_str(&new_val_str) {
+                                                          *existing = new_header_val;
+                                                      }
+                                                 }
+                                             } else {
+                                                 headers.insert(header_name, header_value);
+                                             }
+                                         }
+                                     }
+                                 }
+                             }
+                        }
+                        ParameterLocation::BodyField => {
+                            if let Some(body_bytes) = &context {
+                                if let Ok(mut json_body) = serde_json::from_slice::<Value>(body_bytes) {
+                                    if let Value::Object(ref mut map) = json_body {
+                                        match binding.strategy {
+                                            InjectionStrategy::Strict => { map.insert(binding.target_param, target_value_json); },
+                                            InjectionStrategy::Fallback => { map.entry(binding.target_param).or_insert(target_value_json); },
+                                            InjectionStrategy::Append => {
+                                                if let Some(existing) = map.get_mut(&binding.target_param) {
+                                                    if let Value::Array(arr) = existing {
+                                                        arr.push(target_value_json);
+                                                    } else if let Value::String(s) = existing {
+                                                        let s_val = target_value_json.as_str().unwrap_or("").to_string();
+                                                         let new_s = format!("{},{}", s, s_val);
+                                                         *existing = json!(new_s);
+                                                    }
+                                                } else {
+                                                    map.insert(binding.target_param, target_value_json);
+                                                }
+                                            }
+                                        }
+
+                                        if let Ok(new_bytes) = serde_json::to_vec(&json_body) {
+                                            context = Some(new_bytes);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Template the route for passthrough actions
         let templated_config = match &destination.action {
             Action::Passthrough { path, .. } => {
-                let mut config_clone = (*config).clone();
+                let mut config_clone = config.clone();
                 let PlatformInfo::Api(ref mut c) = config_clone.platform_info;
                 let template = template_route(c.path.clone(), path.to_string());
                 c.path = template;
                 config_clone.platform_info = PlatformInfo::Api(c.clone());
-                Arc::new(config_clone)
+                config_clone
             }
-            _ => config.clone(),
+            _ => config,
         };
 
         self.execute_model_definition(
             &templated_config,
             headers,
             &query_params,
-            &secret.as_value()?,
+            &secret_value,
             context,
         )
         .await
