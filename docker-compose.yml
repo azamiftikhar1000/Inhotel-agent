@@ -26,11 +26,10 @@ services:
       - SECRETS_SERVICE_BASE_URL=http://connections-api:3005/
 
   connections-api:
-    platform: linux/amd64
-    build:
-      context: .
-      dockerfile: api/Dockerfile
+    platform: linux/arm64/v8
+    # image: us-docker.pkg.dev/integrationos/docker-oss/api:1.35.0
     image: connections-api:local
+    pull_policy: never
     ports:
       - 3005:3005
     environment:
