@@ -166,6 +166,11 @@ To build the `connections-api` docker image after making changes to the `api` di
 docker buildx build -t connections-api:local -f api/Dockerfile .
 ```
 
+for mac
+```sh
+docker buildx build --platform linux/arm64/v8 -t connections-api:local -f api/Dockerfile .
+```
+
 To run the `connections-api` docker container, run:
 
 ```sh
