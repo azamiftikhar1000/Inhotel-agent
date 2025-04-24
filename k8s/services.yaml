@@ -1,0 +1,57 @@
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: typescript-services
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  selector:
+    app: typescript-services
+  ports:
+  - port: 3001
+    targetPort: 3003
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connections-api
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  selector:
+    app: connections-api
+  ports:
+  - port: 3005
+    targetPort: 3005
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth-refresh
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  selector:
+    app: oauth-refresh
+  ports:
+  - port: 3003
+    targetPort: 3003
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  clusterIP: None # Headless service for potential Redis StatefulSet 

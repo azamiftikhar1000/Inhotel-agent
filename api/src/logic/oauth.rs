@@ -73,7 +73,17 @@ async fn oauth_handler(
     Path(platform): Path<String>,
     Json(payload): Json<OAuthRequest>,
 ) -> Result<Json<SanitizedConnection>, PicaError> {
+    debug!("Starting OAuth handler for platform: {}, connection_definition_id: {}", 
+           platform, payload.connection_definition_id);
+    
     let conn_oauth_definition = get_conn_oauth_definition(&state, &platform).await?;
+    debug!("Found OAuth definition for platform {}: {:?}", platform, conn_oauth_definition.id);
+    
+    // Log user event access and ownership details
+    debug!("User event access - environment: {}, ownership id: {}", 
+           user_event_access.environment, user_event_access.ownership.id);
+    debug!("Is engineering account: {}", payload.is_engineering_account);
+    
     let setting = get_user_settings(
         &state,
         &user_event_access.ownership,
@@ -479,14 +489,19 @@ async fn get_conn_oauth_definition(
     state: &State<Arc<AppState>>,
     platform: &str,
 ) -> Result<ConnectionOAuthDefinition, PicaError> {
+    debug!("Looking up OAuth definition for platform: {}", platform);
     let oauth_definition_store: &MongoStore<ConnectionOAuthDefinition> =
         &state.app_stores.oauth_config;
 
     let conn_oauth_definition: ConnectionOAuthDefinition = oauth_definition_store
         .get_one(doc! {"connectionPlatform": &platform})
         .await?
-        .ok_or_else(|| ApplicationError::not_found("Connection OAuth definition", None))?;
+        .ok_or_else(|| {
+            error!("No OAuth definition found for platform: {}", platform);
+            ApplicationError::not_found("Connection OAuth definition", None)
+        })?;
 
+    debug!("Found OAuth definition for platform {}: {:?}", platform, conn_oauth_definition.id);
     Ok(conn_oauth_definition)
 }
 
@@ -498,16 +513,32 @@ pub async fn get_user_settings(
     let settings_store: &MongoStore<Settings> = &state.app_stores.settings;
 
     let ownership_id = if is_engineering_account {
-        state.config.engineering_account_id.clone()
+        // Format the engineering account ID correctly if it doesn't already have the build- prefix
+        let id = state.config.engineering_account_id.clone();
+        let formatted_id = if !id.starts_with("build-") {
+            format!("build-{}", id)
+        } else {
+            id
+        };
+        debug!("Using engineering account ID for settings lookup: {}", formatted_id);
+        formatted_id
     } else {
-        ownership.id.to_string()
+        let id = ownership.id.to_string();
+        debug!("Using ownership ID for settings lookup: {}", id);
+        id
     };
 
+    debug!("Looking up settings with query: {}", doc! {"ownership.buildableId": &ownership_id});
+    
     let setting: Settings = settings_store
         .get_one(doc! {"ownership.buildableId": &ownership_id})
         .await?
-        .ok_or_else(|| ApplicationError::not_found("Settings", None))?;
+        .ok_or_else(|| {
+            error!("No settings found for ownership ID: {}", ownership_id);
+            ApplicationError::not_found("Settings", None)
+        })?;
 
+    debug!("Successfully found settings for ownership ID: {}", ownership_id);
     Ok(setting)
 }
 
@@ -516,9 +547,11 @@ async fn get_secret<S: DeserializeOwned>(
     id: String,
     buildable_id: String,
 ) -> Result<S, PicaError> {
+    debug!("Retrieving secret with ID: {}, buildable ID: {}", id, buildable_id);
     let secrets_client = &state.secrets_client;
 
     let encoded_secret = secrets_client.get(&id, &buildable_id).await?;
+    debug!("Successfully retrieved secret with ID: {}", id);
 
     encoded_secret.decode::<S>()
 }
