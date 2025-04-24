@@ -27,8 +27,8 @@ services:
 
   connections-api:
     platform: linux/arm64/v8
-    # image: us-docker.pkg.dev/integrationos/docker-oss/api:1.35.0
-    image: connections-api:local
+    image: us-docker.pkg.dev/integrationos/docker-oss/api:1.35.0
+    # image: connections-api:local
     pull_policy: never
     ports:
       - 3005:3005

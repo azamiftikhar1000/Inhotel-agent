@@ -1,0 +1,96 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress
+  namespace: inhotel-agent-app
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Enable SSL redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Optional: Configure SSL Passthrough if needed
+    # nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    # For automatic cert-manager integration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Increase proxy timeouts if needed
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "1800"
+    # Add this to prevent rewriting of .well-known/acme-challenge paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Switch to ingressClassName in spec instead of the deprecated annotation
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - platform-backend.inhotel.io
+    secretName: app-tls-secret
+  rules:
+  - host: platform-backend.inhotel.io
+    http:
+      paths:
+      # TypeScript services routes
+      - path: /public/v1
+        pathType: Prefix
+        backend:
+          service:
+            name: typescript-services
+            port:
+              number: 3001
+      - path: /internal
+        pathType: Prefix
+        backend:
+          service:
+            name: typescript-services
+            port:
+              number: 3001
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: typescript-services
+            port:
+              number: 3001
+      - path: /healthz
+        pathType: Prefix
+        backend:
+          service:
+            name: typescript-services
+            port:
+              number: 3001
+      
+      # Connections API routes
+      - path: /v1/public
+        pathType: Prefix
+        backend:
+          service:
+            name: connections-api
+            port:
+              number: 3005
+      
+      # General API paths - you may need to adjust these based on your specific routes
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: connections-api
+            port:
+              number: 3005
+      
+      # OAuth paths
+      - path: /oauth
+        pathType: Prefix
+        backend:
+          service:
+            name: oauth-refresh
+            port:
+              number: 3003
+  - host: platform-backend.inhotel.io
+    http:
+      paths:
+      - path: /oauth
+        pathType: Prefix
+        backend:
+          service:
+            name: oauth-refresh
+            port:
+              number: 3003 

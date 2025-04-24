@@ -212,3 +212,4 @@ test.docker-compose.yml
 fluvio-data/
 fluvio-metadata/
 mongo-data/
+mongodb-dump/
