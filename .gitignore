@@ -216,4 +216,4 @@ mongodb-dump/
 out/
 scripts/out/
 scripts/apaleo/
-k8s/
+k8s/secrets.yaml
