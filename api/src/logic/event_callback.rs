@@ -56,16 +56,7 @@ async fn database_connection_lost_callback(
                     let service_name = ServiceName::from_id(connection_id)?;
                     let namespace = secret.namespace;
 
-                    tracing::info!(
-                        "Deleting all resources for connection {id} in namespace {}",
-                        namespace
-                    );
-
-                    tracing::info!("service_name: {service_name}");
-
                     state.k8s_client.delete_all(namespace, service_name).await?;
-
-                    tracing::info!("Deleted all resources for connection {id}");
                 }
 
                 let updated = bson::to_document(&conn).map_err(|e| {

@@ -119,9 +119,27 @@ pub fn generate_event_access(
     };
 
     let iv = rand::thread_rng().gen::<[u8; 16]>();
-    let password = config.event_access_password.as_bytes().try_into()?;
+    let password = match config.event_access_password.as_bytes().try_into() {
+        Ok(p) => p,
+        Err(e) => {
+            error!(
+                "Failed to process event access password. ownership_id={}, error={:?}",
+                payload.ownership.id, e
+            );
+            return Err(anyhow::Error::from(e));
+        }
+    };
 
-    let encoded_access_key = access_key.encode(password, &iv)?;
+    let encoded_access_key = match access_key.encode(password, &iv) {
+        Ok(key) => key,
+        Err(e) => {
+            error!(
+                "Failed to encode access key. ownership_id={}, error={:?}",
+                payload.ownership.id, e
+            );
+            return Err(anyhow::Error::from(e));
+        }
+    };
 
     let key = format!(
         "event_access::{}::{}::{}::{}::{}",
@@ -172,14 +190,28 @@ pub async fn create_event_access_for_new_user(
     Json(req): Json<CreateEventAccessPayloadWithOwnership>,
 ) -> Result<Json<ServerResponse<EventAccess>>, PicaError> {
     if let Err(validation_errors) = req.validate() {
-        warn!("Invalid payload: {:?}", validation_errors);
+        warn!(
+            "Invalid payload for new user event access. ownership_id={}, errors={:?}",
+            req.ownership.id,
+            validation_errors
+        );
         return Err(ApplicationError::bad_request(
             &(format!("Invalid payload: {:?}", validation_errors)),
             None,
         ));
     }
 
-    let throughput = get_client_throughput(&req.ownership.id, &state).await?;
+    let throughput = match get_client_throughput(&req.ownership.id, &state).await {
+        Ok(t) => t,
+        Err(e) => {
+            error!(
+                "Failed to get client throughput. ownership_id={}, error={:?}",
+                req.ownership.id,
+                e
+            );
+            return Err(InternalError::io_err("Could not get client throughput", None).into());
+        }
+    };
 
     let req = CreateEventAccessPayloadWithOwnership {
         throughput: Some(throughput),
@@ -187,8 +219,11 @@ pub async fn create_event_access_for_new_user(
     };
 
     let event_access = generate_event_access(state.config.clone(), req.clone()).map_err(|e| {
-        error!("Error generating event access for new user: {:?}", e);
-
+        error!(
+            "Error generating event access for new user. ownership_id={}, error={:?}",
+            req.ownership.id,
+            e
+        );
         InternalError::io_err("Could not generate event access", None)
     })?;
 
@@ -197,18 +232,25 @@ pub async fn create_event_access_for_new_user(
         req.environment
     ));
 
-    state
-        .app_stores
-        .event_access
-        .create_one(&event_access)
-        .await
-        .map_err(|e| {
-            error!("Error creating event access for new user: {:?}", e);
+    match state.app_stores.event_access.create_one(&event_access).await {
+        Ok(_) => {
+            // Success
+        }
+        Err(e) => {
+            error!(
+                "Error creating event access in database. ownership_id={}, event_access_id={}, error={:?}",
+                req.ownership.id,
+                event_access.id,
+                e
+            );
+            return Err(InternalError::io_err("Could not create event access", None).into());
+        }
+    }
 
-            e
-        })?;
-
-    Ok(Json(ServerResponse::new("event_access", event_access)))
+    Ok(Json(ServerResponse::new(
+        "Event Access created successfully",
+        event_access,
+    )))
 }
 
 pub async fn create_event_access(

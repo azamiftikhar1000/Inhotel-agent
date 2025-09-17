@@ -46,6 +46,7 @@ tracing.workspace = true
 uuid.workspace = true
 validator.workspace = true
 posthog-rs.workspace = true
+percent-encoding = "2.1"
 
 [dev-dependencies]
 testcontainers-modules = { workspace = true, features = ["mongo", "redis"] }

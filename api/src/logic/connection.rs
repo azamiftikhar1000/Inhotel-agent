@@ -115,7 +115,7 @@ async fn test_connection(
 
         if let Some(delay) = connection_config.test_delay_in_millis {
             if delay < 0 {
-                tracing::warn!("test_delay_in_millis is negative, skipping delay");
+                // Skip negative delay values
             } else {
                 let delay = u16::try_from(delay).map_err(|e| {
                     error!("Error converting test_delay_in_millis to u64: {:?}", e);

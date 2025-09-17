@@ -23,12 +23,12 @@ Typical usage
 python add-secrets-script.py \
   --backend-url https://platform-backend.inhotel.io \
   --pica-secret  sk_test_1_3pejYG_SdSxV9xkt5_GA8WoMsSnfBHvY1qpGhlX-6DKd9kyZO3ee9hWfjGWpt5dY0AzxvM51q6_45_Q6bJTWCTuax7yq4X96nhvB0uTwhhLlsxyJm02JqasmdeDVeHt08GxGPoiBc7I9u00-1EKOejw62kNO0M1EaEFqwaGXw1Y8IfFH\
-  --client-id  QWMI-AC-APALEO_PICA \
-  --client-secret a0Ixq7RhlDbNJFGeJB3KLzs8CGh1tY \
-  --connection-definition-id conn_def::GDYdQHhelfo::kCMpiR68QtuDvWV-dK_YEQ \
+  --client-id  KHWD-AC-INHOTEL_TEST \
+  --client-secret Ka6Ciscb6HgyFpe6RxcfgpzCt5HMes \
+  --connection-definition-id conn_def::GD6vTg4RkJE::bNahMWDDQh-tCq59YSGeQw \
   --user-id 65648fa26b1eb500122c5323 \
   --buildable-id build-1c3cd7af757d4aebab523f5373190e1b \
-  --platform apaleo \
+  --platform apaleo-admin \
   --environment test
 """
 

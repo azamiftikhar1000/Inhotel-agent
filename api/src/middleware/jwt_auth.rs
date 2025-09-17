@@ -6,13 +6,13 @@ use osentities::{
     constant::{DEFAULT_AUDIENCE, DEFAULT_ISSUER, FALLBACK_AUDIENCE, FALLBACK_ISSUER},
     ApplicationError, Claims, PicaError, BEARER_PREFIX,
 };
-use std::sync::Arc;
-use tracing::info;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone)]
 pub struct JwtState {
     validation: Validation,
-    decoding_key: DecodingKey,
+    jwt_secret: String,
+    buildable_secret: String,
 }
 
 impl JwtState {
@@ -20,9 +20,15 @@ impl JwtState {
         let mut validation = Validation::default();
         validation.set_audience(&[DEFAULT_AUDIENCE, FALLBACK_AUDIENCE]);
         validation.set_issuer(&[DEFAULT_ISSUER, FALLBACK_ISSUER]);
+
+        // Get buildable_secret from environment if not in config
+        let buildable_secret = std::env::var("BUILDABLE_SECRET")
+            .unwrap_or_else(|_| "".to_string());
+
         Self {
             validation,
-            decoding_key: DecodingKey::from_secret(state.config.jwt_secret.as_ref()),
+            jwt_secret: state.config.jwt_secret.clone(),
+            buildable_secret,
         }
     }
 }
@@ -33,7 +39,6 @@ pub async fn jwt_auth_middleware(
     next: Next,
 ) -> Result<Response, PicaError> {
     let Some(auth_header) = req.headers().get(http::header::AUTHORIZATION) else {
-        info!("missing authorization header");
         return Err(ApplicationError::unauthorized(
             "You are not authorized to access this resource",
             None,
@@ -41,7 +46,6 @@ pub async fn jwt_auth_middleware(
     };
 
     let Ok(auth_header) = auth_header.to_str() else {
-        info!("invalid authorization header");
         return Err(ApplicationError::unauthorized(
             "You are not authorized to access this resource",
             None,
@@ -49,26 +53,58 @@ pub async fn jwt_auth_middleware(
     };
 
     if !auth_header.starts_with(BEARER_PREFIX) {
-        info!("invalid authorization header");
         return Err(ApplicationError::unauthorized(
             "You are not authorized to access this resource",
             None,
         ));
-    }
+    };
 
     let token = &auth_header[BEARER_PREFIX.len()..];
 
-    match jsonwebtoken::decode::<Claims>(token, &state.decoding_key, &state.validation) {
+    // 1) First decode header to check algorithm
+    let header = match jsonwebtoken::decode_header(token) {
+        Ok(h) => h,
+        Err(_) => {
+            return Err(ApplicationError::unauthorized("Invalid token format", None));
+        }
+    };
+
+    // 2) Try to decode claims with minimal validation to determine token type
+    let mut minimal_validation = Validation::default();
+    minimal_validation.insecure_disable_signature_validation();
+    minimal_validation.validate_exp = false;
+    minimal_validation.validate_nbf = false;
+    
+    let unverified_claims = match jsonwebtoken::decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(&[]), // Empty key since we're not validating signature
+        &minimal_validation,
+    ) {
+        Ok(token_data) => token_data.claims,
+        Err(_) => {
+            return Err(ApplicationError::unauthorized("Invalid token structure", None));
+        }
+    };
+
+    // 3) Determine which secret to use for verification
+    let composite_secret = if unverified_claims.is_buildable_core {
+        format!("{}{}", state.buildable_secret, state.jwt_secret)
+    } else if unverified_claims.buildable_id.is_empty() {
+        state.jwt_secret.clone()
+    } else {
+        format!("{}{}", state.jwt_secret, unverified_claims.buildable_id)
+    };
+
+    // 4) Do final verification with correct secret and full validation
+    let final_key = DecodingKey::from_secret(composite_secret.as_bytes());
+    
+    match jsonwebtoken::decode::<Claims>(token, &final_key, &state.validation) {
         Ok(decoded_token) => {
             req.extensions_mut().insert(Arc::new(decoded_token.claims));
             Ok(next.run(req).await)
         }
-        Err(e) => {
-            info!("invalid JWT token : {:?}", e);
-            Err(ApplicationError::forbidden(
-                "You are not authorized to access this resource",
-                None,
-            ))
+        Err(_) => {
+            Err(ApplicationError::unauthorized("Invalid token signature", None))
         }
     }
 }

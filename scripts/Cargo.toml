@@ -1,0 +1,13 @@
+[package]
+name = "add-connection-model"
+version = "1.0.0"
+edition = "2021"
+
+[[bin]]
+name = "add-connection-model"
+path = "add_connection_model_definition.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true 

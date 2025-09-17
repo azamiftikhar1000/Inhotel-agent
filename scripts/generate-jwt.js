@@ -31,5 +31,7 @@ const payload = {
     iss: "pica"
 };
 
-const token = jwt.sign(payload, JWT_SECRET);
+const compositeSecret = JWT_SECRET + payload.buildableId;
+const token = jwt.sign(payload, compositeSecret);
+// const token = jwt.sign(payload, JWT_SECRET);
 console.log(token);

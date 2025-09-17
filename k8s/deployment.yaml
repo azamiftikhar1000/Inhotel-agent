@@ -24,13 +24,13 @@ spec:
             name: app-secrets
         env:
         - name: MONGO_URI
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/events-service?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/events-service?retryWrites=true&w=majority"
         - name: CONTEXT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: CONTROL_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: EVENT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: MONGO_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -78,7 +78,7 @@ spec:
     spec:
       containers:
       - name: connections-api
-        image: gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections:latest
+        image: gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections:latest-user
         ports:
         - containerPort: 3005
         envFrom:
@@ -88,13 +88,13 @@ spec:
             name: app-secrets
         env:
         - name: MONGO_URI
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/events-service?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/events-service?retryWrites=true&w=majority"
         - name: CONTEXT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: CONTROL_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: EVENT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: MONGO_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -105,6 +105,11 @@ spec:
             secretKeyRef:
               name: app-secrets
               key: ENGINEERING_ACCOUNT_BUILDABLE_ID
+        - name: BUILDABLE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: BUILDABLE_SECRET
         - name: RUST_LOG
           value: "api=info,tower_http=info,udm=info,osentities=info"
         - name: GOOGLE_APPLICATION_CREDENTIALS
@@ -145,13 +150,13 @@ spec:
             name: app-secrets
         env:
         - name: MONGO_URI
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/events-service?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/events-service?retryWrites=true&w=majority"
         - name: CONTEXT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: CONTROL_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: EVENT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: MONGO_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -184,13 +189,13 @@ spec:
             name: app-secrets
         env:
         - name: MONGO_URI
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/events-service?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/events-service?retryWrites=true&w=majority"
         - name: CONTEXT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: CONTROL_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: EVENT_DATABASE_URL
-          value: "mongodb+srv://pica:NOxXPJNWKymUsMJv@inhotel.6xjwr.mongodb.net/?retryWrites=true&w=majority"
+          value: "mongodb+srv://azam:BshEdnWBqL7ZXEdJ@cluster0.pbgyvb9.mongodb.net/?retryWrites=true&w=majority"
         - name: MONGO_PASSWORD
           valueFrom:
             secretKeyRef:

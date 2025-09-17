@@ -437,14 +437,25 @@ pub async fn get_available_connectors(
 
     if authkit_enabled {
         let settings_store = state.app_stores.settings.clone();
-        let settings = settings_store
-            .get_one(doc! {
-                "ownership.buildableId": user_event_access.ownership.id.to_string(),
-            })
-            .await
-            .unwrap();
+        
+        let query_filter = doc! {
+            "ownership.buildableId": user_event_access.ownership.id.to_string(),
+        };
+        
+        let settings_result = settings_store
+            .get_one(query_filter)
+            .await;
+            
+        if let Err(_) = settings_result {
+            return Err(ApplicationError::internal_server_error(
+                "Error fetching user settings",
+                None,
+            ));
+        }
+        
+        let settings = settings_result.unwrap();
 
-        if let Some(settings) = settings {
+        if let Some(ref settings) = settings {
             // Get platforms that are active and match the user's environment
             let filtered_platforms: Vec<String> = settings
                 .connected_platforms

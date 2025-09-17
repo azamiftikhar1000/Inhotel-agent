@@ -7,10 +7,18 @@ use tracing::info;
 
 fn main() -> Result<()> {
     dotenv().ok();
-    let config = ConnectionsConfig::init_from_env()?;
-    let _guard = OtelGuard {
-        otlp_url: config.otlp_endpoint.clone(),
-    };
+    
+    // Load the full config using Envconfig
+    let mut config = ConnectionsConfig::init_from_env()?;
+    
+    // Set buildable_secret from environment
+    config.buildable_secret = std::env::var("BUILDABLE_SECRET")
+        .unwrap_or_else(|_| "".to_string());
+
+    // Only create OtelGuard if we have a valid OTLP endpoint
+    let _guard = config.otlp_endpoint.clone().filter(|url| !url.is_empty()).map(|url| OtelGuard {
+        otlp_url: Some(url),
+    });
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(config.worker_threads.unwrap_or(num_cpus::get()))
@@ -22,7 +30,8 @@ fn main() -> Result<()> {
             "connections-api".into(),
             "info".into(),
             std::io::stdout,
-            config.otlp_endpoint.clone(),
+            // Only pass OTLP endpoint if it's not empty
+            config.otlp_endpoint.clone().filter(|url| !url.is_empty()),
         );
 
         init_subscriber(subscriber);

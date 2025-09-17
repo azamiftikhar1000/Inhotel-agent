@@ -109,10 +109,8 @@ async fn oauth_handler(
                 )
             })?,
         if payload.is_engineering_account {
-            tracing::info!("Using engineering account id for secret");
             state.config.engineering_account_id.clone()
         } else {
-            tracing::info!("Using user event access id for secret");
             user_event_access.clone().ownership.id.to_string()
         },
     )

@@ -251,29 +251,73 @@ impl UnifiedDestination {
         secret: &Value,
         context: Option<Vec<u8>>,
     ) -> Result<reqwest::Response, PicaError> {
+        println!("EXECUTE MODEL: Starting execute_model_definition for CMD ID: {}", config.id);
+        println!("EXECUTE MODEL: Action: {}", config.action_name);
+        
         let renderer = Handlebars::new();
 
         let config_str = serde_json::to_string(&config)
             .map_err(|e| InternalError::invalid_argument(&e.to_string(), None))?;
+        
+        println!("EXECUTE MODEL: Original config: {}", config_str);
+        println!("EXECUTE MODEL: Rendering template with secret");
 
         let config = renderer
             .render_template(&config_str, secret)
             .map_err(|e| InternalError::invalid_argument(&e.to_string(), None))?;
 
+        println!("EXECUTE MODEL: Templated config: {}", config);
+
         let config: ConnectionModelDefinition = serde_json::from_str(&config)
             .map_err(|e| InternalError::invalid_argument(&e.to_string(), None))?;
 
-        match config.platform_info {
-            PlatformInfo::Api(ref c) => {
-                let api_caller = CallerClient::new(c, config.action, &self.http_client);
+        let PlatformInfo::Api(c) = &config.platform_info;
+        
+        println!("EXECUTE MODEL: API base_url: {}", c.base_url);
+        println!("EXECUTE MODEL: API Path: {}", c.path);
+        println!("EXECUTE MODEL: API HTTP Method: {}", config.action);
+        
+        // Log auth method
+        println!("EXECUTE MODEL: Auth method: {:?}", c.auth_method);
+        
+        // Log any headers being added by the config
+        if let Some(headers_config) = &c.headers {
+            println!("EXECUTE MODEL: Config headers: {:?}", headers_config.keys());
+        }
+        
+        let api_caller = CallerClient::new(c, config.action, &self.http_client);
 
-                let response = api_caller
-                    .make_request(context, Some(secret), Some(headers), Some(query_params))
-                    .await?;
-
-                Ok(response)
+        // Log body content if present (sanitized)
+        if let Some(body_bytes) = &context {
+            if let Ok(body_str) = String::from_utf8(body_bytes.clone()) {
+                if body_str.len() > 1000 {
+                    println!("EXECUTE MODEL: Request body (truncated): {}...", &body_str[..1000]);
+                } else {
+                    println!("EXECUTE MODEL: Request body: {}", body_str);
+                }
+            } else {
+                println!("EXECUTE MODEL: Request body: [BINARY DATA]");
             }
         }
+        
+        // Log query parameters
+        println!("EXECUTE MODEL: Query parameters: {:?}", query_params);
+        
+        println!("EXECUTE MODEL: Making API request");
+        let response = api_caller
+            .make_request(context, Some(secret), Some(headers), Some(query_params))
+            .await
+            .map_err(|e| {
+                println!("EXECUTE MODEL ERROR: Failed to make API request: {}", e);
+                e
+            })?;
+
+        println!("EXECUTE MODEL: Response received, status: {}", response.status());
+        
+        // Try to log response headers
+        println!("EXECUTE MODEL: Response headers: {:?}", response.headers());
+        
+        Ok(response)
     }
 
     pub async fn dispatch_unified_request(
@@ -535,9 +579,28 @@ impl UnifiedDestination {
         query_params: HashMap<String, String>,
         context: Option<Vec<u8>>,
     ) -> Result<reqwest::Response, PicaError> {
+        println!("UNIFIED DISPATCH: Starting dispatch_destination_request");
+        println!("UNIFIED DISPATCH: Destination: {:?}", destination);
+        println!("UNIFIED DISPATCH: Query params: {:?}", query_params);
+        println!("UNIFIED DISPATCH: Headers count: {}", headers.len());
+        
+        // Log all headers (with sanitization for sensitive values)
+        for (key, value) in headers.iter() {
+            let display_value = if key.as_str().to_lowercase().contains("auth") 
+                || key.as_str().to_lowercase().contains("key") 
+                || key.as_str().to_lowercase().contains("secret") {
+                "[REDACTED]".to_string()
+            } else {
+                value.to_str().unwrap_or("[BINARY]").to_string()
+            };
+            println!("UNIFIED DISPATCH: Header - {}: {}", key, display_value);
+        }
+
         let connection = if let Some(connection) = connection {
+            println!("UNIFIED DISPATCH: Using provided connection: {}", connection.id);
             connection
         } else {
+            println!("UNIFIED DISPATCH: Fetching connection from cache/store with key: {}", destination.connection_key);
             Arc::new(
                 self.connections_cache
                     .get_or_insert_with_filter(
@@ -546,51 +609,93 @@ impl UnifiedDestination {
                         doc! { "key": destination.connection_key.as_ref() },
                         None,
                     )
-                    .await?,
+                    .await
+                    .map_err(|e| {
+                        println!("UNIFIED DISPATCH ERROR: Failed to get connection: {}", e);
+                        e
+                    })?
             )
         };
+        println!("UNIFIED DISPATCH: Connection ID: {}", connection.id);
+        println!("UNIFIED DISPATCH: Connection Platform: {}", connection.platform);
+        println!("UNIFIED DISPATCH: Connection Platform Version: {}", connection.platform_version);
 
         let config = match self.get_connection_model_definition(destination).await {
-            Ok(Some(c)) => Ok(Arc::new(c)),
-            Ok(None) => Err(InternalError::key_not_found(
-                "ConnectionModelDefinition",
-                None,
-            )),
-            Err(e) => Err(InternalError::connection_error(
-                format!(
-                    "Failed to get connection model definition: {}",
-                    e.message().as_ref()
-                )
-                .as_str(),
-                None,
-            )),
+            Ok(Some(c)) => {
+                println!("UNIFIED DISPATCH: Found connection model definition: {}", c.id);
+                Ok(Arc::new(c))
+            },
+            Ok(None) => {
+                println!("UNIFIED DISPATCH ERROR: No connection model definition found");
+                Err(InternalError::key_not_found(
+                    "ConnectionModelDefinition",
+                    None,
+                ))
+            },
+            Err(e) => {
+                println!("UNIFIED DISPATCH ERROR: Error fetching connection model definition: {}", e);
+                Err(InternalError::connection_error(
+                    format!(
+                        "Failed to get connection model definition: {}",
+                        e.message().as_ref()
+                    )
+                    .as_str(),
+                    None,
+                ))
+            },
         }?;
 
         if !config.supported {
+            println!("UNIFIED DISPATCH ERROR: Connection model definition is not supported");
             return Err(ApplicationError::not_found(
                 "Supported Connection Model Definition",
                 None,
             ));
         }
 
+        println!("UNIFIED DISPATCH: Connection model definition title: {}", config.title);
+        println!("UNIFIED DISPATCH: Connection model definition action: {}", config.action_name);
+
         let secret = self
             .secrets_cache
             .get_or_insert_with_fn(connection.as_ref(), || async {
+                println!("UNIFIED DISPATCH: Fetching secret for connection: {}", connection.id);
                 match self
                     .secrets_client
                     .get(&connection.secrets_service_id, &connection.ownership.id)
                     .map(|v| Some(v).transpose())
                     .await
                 {
-                    Ok(Some(c)) => Ok(c),
-                    Ok(None) => Err(InternalError::key_not_found("Secrets", None)),
-                    Err(e) => Err(InternalError::connection_error(
-                        format!("Failed to get secret: {}", e.message().as_ref()).as_str(),
-                        None,
-                    )),
+                    Ok(Some(c)) => {
+                        println!("UNIFIED DISPATCH: Secret successfully retrieved");
+                        Ok(c)
+                    },
+                    Ok(None) => {
+                        println!("UNIFIED DISPATCH ERROR: No secret found for connection");
+                        Err(InternalError::key_not_found("Secrets", None))
+                    },
+                    Err(e) => {
+                        println!("UNIFIED DISPATCH ERROR: Error fetching secret: {}", e);
+                        Err(InternalError::connection_error(
+                            format!("Failed to get secret: {}", e.message().as_ref()).as_str(),
+                            None,
+                        ))
+                    },
                 }
             })
-            .await?;
+            .await
+            .map_err(|e| {
+                println!("UNIFIED DISPATCH ERROR: Failed to get secret: {}", e);
+                e
+            })?;
+
+        // Log secret structure (without actual values)
+        if let Ok(secret_value) = secret.as_value() {
+            if let Value::Object(map) = &secret_value {
+                let keys = map.keys().collect::<Vec<_>>();
+                println!("UNIFIED DISPATCH: Secret contains keys: {:?}", keys);
+            }
+        }
 
         // Template the route for passthrough actions
         let templated_config = match &destination.action {
@@ -598,6 +703,7 @@ impl UnifiedDestination {
                 let mut config_clone = (*config).clone();
                 let PlatformInfo::Api(ref mut c) = config_clone.platform_info;
                 let template = template_route(c.path.clone(), path.to_string());
+                println!("UNIFIED DISPATCH: Templated path from '{}' to '{}'", c.path, template);
                 c.path = template;
                 config_clone.platform_info = PlatformInfo::Api(c.clone());
                 Arc::new(config_clone)
@@ -605,7 +711,53 @@ impl UnifiedDestination {
             _ => config.clone(),
         };
 
-        self.execute_model_definition(
+        // Log the API configuration details
+        let PlatformInfo::Api(api_config) = &templated_config.platform_info;
+        println!("UNIFIED DISPATCH: API URL: {}", api_config.base_url);
+        println!("UNIFIED DISPATCH: API Path: {}", api_config.path);
+        println!("UNIFIED DISPATCH: API Method: {}", templated_config.action);
+        
+        // Generate curl command (sanitized)
+        let mut curl_cmd = format!("curl -X {} '{}{}'", 
+            templated_config.action, 
+            api_config.base_url, 
+            api_config.path);
+        
+        // Add headers to curl
+        for (key, value) in headers.iter() {
+            let display_value = if key.as_str().to_lowercase().contains("auth") 
+                || key.as_str().to_lowercase().contains("key") 
+                || key.as_str().to_lowercase().contains("secret") {
+                "[REDACTED]"
+            } else {
+                value.to_str().unwrap_or("[BINARY]")
+            };
+            curl_cmd.push_str(&format!(" \\\n  --header '{}: {}'", key, display_value));
+        }
+        
+        // Add query params to curl if any
+        if !query_params.is_empty() {
+            curl_cmd.push_str(" \\\n  --get");
+            for (key, value) in &query_params {
+                curl_cmd.push_str(&format!(" \\\n  --data-urlencode '{}={}'", key, value));
+            }
+        }
+        
+        // Add body to curl if any
+        if let Some(body_bytes) = &context {
+            if let Ok(body_str) = String::from_utf8(body_bytes.clone()) {
+                if !body_str.is_empty() {
+                    curl_cmd.push_str(&format!(" \\\n  --data '{}'", body_str));
+                }
+            } else {
+                curl_cmd.push_str(" \\\n  --data '[BINARY DATA]'");
+            }
+        }
+        
+        println!("UNIFIED DISPATCH: Equivalent curl command:\n{}", curl_cmd);
+        println!("UNIFIED DISPATCH: About to execute model definition");
+
+        let response = self.execute_model_definition(
             &templated_config,
             headers,
             &query_params,
@@ -613,6 +765,16 @@ impl UnifiedDestination {
             context,
         )
         .await
+        .map_err(|e| {
+            println!("UNIFIED DISPATCH ERROR: Failed to execute model definition: {}", e);
+            e
+        })?;
+
+        // Log response details
+        println!("UNIFIED DISPATCH: Response status: {}", response.status());
+        println!("UNIFIED DISPATCH: Response headers: {:?}", response.headers());
+
+        Ok(response)
     }
 
     async fn get_dependencies(

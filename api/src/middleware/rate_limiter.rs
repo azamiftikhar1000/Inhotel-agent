@@ -36,9 +36,6 @@ impl RateLimiter {
 
         let mut redis = RedisCache::new(&state.config.cache_config)
             .await
-            .inspect(|_| {
-                tracing::info!("Connected to redis at {}", state.config.cache_config.url);
-            })
             .context(format!(
                 "Could not connect to redis at {}",
                 state.config.cache_config.url
@@ -86,10 +83,7 @@ impl RateLimiter {
         let (tx, rx) = oneshot::channel();
         match self.tx.send((id, tx)).await {
             Ok(()) => rx.await.unwrap_or_default(),
-            Err(e) => {
-                warn!("Could not send to redis task: {e}");
-                0
-            }
+            Err(_) => 0,
         }
     }
 }

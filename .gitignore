@@ -213,3 +213,7 @@ fluvio-data/
 fluvio-metadata/
 mongo-data/
 mongodb-dump/
+out/
+scripts/out/
+scripts/apaleo/
+k8s/

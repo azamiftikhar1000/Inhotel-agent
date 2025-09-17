@@ -89,6 +89,7 @@ pub struct ConnectionsConfig {
     pub k8s_mode: K8sMode,
     #[envconfig(from = "OTLP_ENDPOINT")]
     pub otlp_endpoint: Option<String>,
+    pub buildable_secret: String,
 }
 
 impl Display for ConnectionsConfig {

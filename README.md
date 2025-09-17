@@ -177,3 +177,20 @@ To run the `connections-api` docker container, run:
 docker compose up -d
 ```
 
+Migrate seed data:
+```sh
+  docker-compose -f docker-compose.data.yml up -d
+```
+
+Push image to GCP Registry
+```sh
+docker tag connections-api:latest gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections:latest
+```
+```sh
+docker push gcr.io/inhotel-prod/inhotel-agent-connections:latest
+```
+
+Restart Deployment
+```sh
+kubectl rollout restart deployment/connections-api
+```

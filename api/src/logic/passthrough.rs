@@ -46,36 +46,69 @@ pub async fn passthrough_request(
     method: Method,
     body: Bytes,
 ) -> impl IntoResponse {
+    println!("ENTRY POINT: passthrough_request function entered");
+    println!("ENTRY POINT: URI: {}", uri);
+    println!("ENTRY POINT: Method: {}", method);
+    println!("ENTRY POINT: Headers count: {}", headers.len());
+    
+    // Log all headers (sanitized)
+    for (key, value) in headers.iter() {
+        let display_value = if key.as_str().to_lowercase().contains("auth") 
+            || key.as_str().to_lowercase().contains("key") 
+            || key.as_str().to_lowercase().contains("secret") {
+            "[REDACTED]".to_string()
+        } else {
+            value.to_str().unwrap_or("[BINARY]").to_string()
+        };
+        println!("ENTRY POINT: Header - {}: {}", key, display_value);
+    }
+    
+    // Log expected header names from config
+    println!("ENTRY POINT: Expected connection header name: {}", state.config.headers.connection_header);
+    println!("ENTRY POINT: Expected auth header name: {}", state.config.headers.auth_header);
+    
     let Some(connection_key_header) = headers.get(&state.config.headers.connection_header) else {
+        println!("ERROR: Connection header not found. Expected header name: {}", state.config.headers.connection_header);
         return Err(ApplicationError::bad_request(
             "Connection header not found",
             None,
         ));
     };
+    println!("CHECKPOINT 1: Connection header found");
 
     let Some(connection_secret_header) = headers.get(&state.config.headers.auth_header) else {
+        println!("ERROR: Auth header not found. Expected header name: {}", state.config.headers.auth_header);
         return Err(ApplicationError::bad_request(
             "Connection header not found",
             None,
         ));
     };
+    println!("CHECKPOINT 2: Auth header found");
 
     let host = headers.get("host");
     let host = host.and_then(|h| h.to_str().map(|s| s.to_string()).ok());
+    println!("CHECKPOINT 3: Host processed: {:?}", host);
 
     let connection_secret_header = connection_secret_header.clone();
 
+    println!("CHECKPOINT 4: About to call get_connection");
     let connection = get_connection(
         user_event_access.as_ref(),
         connection_key_header,
         &state.app_stores,
         &state.connections_cache,
     )
-    .await?;
+    .await
+    .map_err(|e| {
+        println!("ERROR: Failed to get connection: {}", e);
+        e
+    })?;
+    println!("CHECKPOINT 5: Connection retrieved successfully: {}", connection.id);
 
     let id_header = headers.get(QUERY_BY_ID_PASSTHROUGH);
     let id = id_header.and_then(|h| h.to_str().ok());
     let id_str = id.map(|i| i.to_string());
+    println!("CHECKPOINT 6: ID header processed: {:?}", id_str);
 
     info!("Executing {} request on {}", method, uri.path());
 
@@ -88,11 +121,14 @@ pub async fn passthrough_request(
         },
         connection_key: connection.key.clone(),
     };
+    println!("CHECKPOINT 7: Destination created");
 
     let Query(query_params) = query_params.unwrap_or_default();
+    println!("CHECKPOINT 8: Query params processed: {:?}", query_params);
 
     headers.remove(&state.config.headers.auth_header);
     headers.remove(&state.config.headers.connection_header);
+    println!("CHECKPOINT 9: Auth and connection headers removed");
 
     // Add debugging logs before making the request
     println!("DIAGNOSTIC PASSTHROUGH: About to dispatch request");
@@ -109,6 +145,7 @@ pub async fn passthrough_request(
     }
 
     // Now make the request
+    println!("CHECKPOINT 10: About to call dispatch_destination_request");
     let model_execution_result = state
         .extractor_caller
         .dispatch_destination_request(
@@ -128,6 +165,7 @@ pub async fn passthrough_request(
 
             e
         })?;
+    println!("CHECKPOINT 11: dispatch_destination_request completed successfully");
 
     let mut headers = HeaderMap::new();
 
@@ -146,12 +184,14 @@ pub async fn passthrough_request(
                 };
             }
         });
+    println!("CHECKPOINT 12: Response headers processed");
 
     let connection_platform = connection.platform.to_string();
     let connection_platform_version = connection.platform_version.to_string();
     let connection_key = connection.key.to_string();
     let request_headers = headers.clone();
     let request_status_code = model_execution_result.status();
+    println!("CHECKPOINT 13: Response status code: {}", request_status_code);
 
     let database_c = state.app_stores.db.clone();
     let event_access_pass_c = state.config.event_access_password.clone();
@@ -197,7 +237,6 @@ pub async fn passthrough_request(
 
         if let (Some(cmd), Some(encrypted_access_key)) = (cmd, connection_secret_header) {
             if let Ok(encrypted_access_key) = EncryptedAccessKey::parse(&encrypted_access_key) {
-                tracing::info!("encrypted_access_key: {:?}", encrypted_access_key);
                 let path = uri.path().trim_end_matches('/');
 
                 let metadata = UnifiedMetadataBuilder::default()
@@ -255,11 +294,11 @@ pub async fn passthrough_request(
                             if let Err(e) = event_tx_c.send(event).await {
                                 error!("Could not send event to receiver: {e}");
                             }
-                        } else {
-                            tracing::error!("Error generating event for passthrough")
                         }
                     }
-                    None => tracing::error!("Error generating event for passthrough"),
+                    None => {
+                        // Handle error silently
+                    }
                 };
             }
         };
@@ -269,16 +308,19 @@ pub async fn passthrough_request(
     if let Err(e) = state.metric_tx.send(metric).await {
         error!("Could not send metric to receiver: {e}");
     }
+    println!("CHECKPOINT 14: Metric sent");
 
     let bytes = model_execution_result.bytes().await.map_err(|e| {
         error!(
             "Error retrieving bytes from response in passthrough endpoint: {:?}",
             e
         );
-
+        println!("ERROR: Failed to retrieve bytes from response: {:?}", e);
         InternalError::script_error("Error retrieving bytes from response", None)
     })?;
+    println!("CHECKPOINT 15: Response bytes retrieved");
 
+    println!("CHECKPOINT 16: Returning response with status: {}", request_status_code);
     Ok((request_status_code, headers, bytes))
 }
 

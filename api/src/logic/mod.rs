@@ -334,23 +334,48 @@ async fn get_connection(
     stores: &AppStores,
     cache: &ConnectionHeaderCache,
 ) -> Result<Arc<Connection>, PicaError> {
+    println!("GET_CONNECTION: Starting get_connection function");
+    println!("GET_CONNECTION: Access ownership ID: {}", access.ownership.id);
+    
+    let connection_key_str = match connection_key.to_str() {
+        Ok(key) => {
+            println!("GET_CONNECTION: Connection key: {}", key);
+            key
+        },
+        Err(_) => {
+            println!("GET_CONNECTION ERROR: Invalid connection key header");
+            return Err(ApplicationError::bad_request("Invalid connection key header", None));
+        }
+    };
+    
+    println!("GET_CONNECTION: Looking for connection with key: {} and ownership ID: {}", 
+             connection_key_str, access.ownership.id);
+    
     let connection = cache
         .get_or_insert_with_filter(
             &(access.ownership.id.clone(), connection_key.clone()),
             stores.connection.clone(),
             doc! {
-                "key": connection_key.to_str().map_err(|_| {
-                    ApplicationError::bad_request("Invalid connection key header", None)
-                })?,
+                "key": connection_key_str,
                 "ownership.buildableId": access.ownership.id.as_ref(),
                 "deleted": false
             },
             None,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            println!("GET_CONNECTION ERROR: Failed to get connection from cache/store: {}", e);
+            e
+        })?;
+    
+    println!("GET_CONNECTION: Connection found with ID: {}", connection.id);
+    println!("GET_CONNECTION: Connection platform: {}", connection.platform);
+    println!("GET_CONNECTION: Connection OAuth enabled: {}", connection.oauth.is_some());
 
     // If Oauth is enabled, fetching the latest secret (due to refresh, cache can't be used)
     if let Some(OAuth::Enabled { .. }) = connection.oauth {
+        println!("GET_CONNECTION: OAuth is enabled, fetching latest secrets");
+        
         let collection = stores
             .db
             .collection::<SparseConnection>(&Store::Connections.to_string());
@@ -366,10 +391,18 @@ async fn get_connection(
             })
             .build();
 
+        println!("GET_CONNECTION: Querying for latest OAuth data");
         let sparse_connection = match collection.find_one(filter).with_options(options).await {
-            Ok(Some(data)) => data,
-            Ok(None) => return Err(ApplicationError::not_found("Connection", None)),
+            Ok(Some(data)) => {
+                println!("GET_CONNECTION: Latest OAuth data found");
+                data
+            },
+            Ok(None) => {
+                println!("GET_CONNECTION ERROR: Connection not found when fetching latest OAuth data");
+                return Err(ApplicationError::not_found("Connection", None));
+            },
             Err(e) => {
+                println!("GET_CONNECTION ERROR: Error fetching connection: {:?}", e);
                 error!("Error fetching connection: {:?}", e);
                 return Err(InternalError::unknown("Error fetching connection", None));
             }
@@ -379,8 +412,11 @@ async fn get_connection(
         updated_connection.oauth = Some(sparse_connection.oauth);
         updated_connection.secrets_service_id = sparse_connection.secrets_service_id;
 
+        println!("GET_CONNECTION: Returning updated connection with latest OAuth data");
         return Ok(Arc::new(updated_connection));
     }
+    
+    println!("GET_CONNECTION: Returning connection (OAuth not enabled)");
     Ok(Arc::new(connection))
 }
 

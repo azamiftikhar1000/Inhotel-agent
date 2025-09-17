@@ -22,17 +22,11 @@ pub struct LoggerTracker;
 #[async_trait]
 impl Track<TrackedMetric> for LoggerTracker {
     async fn track_metric(&self, metric: &Metric) -> Result<Unit, PicaError> {
-        let track = metric.track()?;
-        tracing::info!("Tracking event: {track:?}");
-
+        let _track = metric.track()?;
         Ok(())
     }
 
-    async fn track_many_metrics(&self, metric: &[Metric]) -> Result<Unit, PicaError> {
-        metric.iter().for_each(|m| {
-            tracing::info!("Tracking event: {m:?}");
-        });
-
+    async fn track_many_metrics(&self, _metric: &[Metric]) -> Result<Unit, PicaError> {
         Ok(())
     }
 
@@ -67,8 +61,7 @@ impl Track<TrackedMetric> for PosthogTracker {
     async fn track_metric(&self, metric: &Metric) -> Result<Unit, PicaError> {
         let event = metric.track()?;
 
-        self.client.capture(event).await.map_err(|e| {
-            tracing::error!("Could not track event: {e}");
+        self.client.capture(event).await.map_err(|_| {
             InternalError::io_err("Could not track event", None)
         })?;
 
@@ -81,8 +74,7 @@ impl Track<TrackedMetric> for PosthogTracker {
             .map(|m| m.track())
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.client.capture_batch(events).await.map_err(|e| {
-            tracing::error!("Could not track event: {e}");
+        self.client.capture_batch(events).await.map_err(|_| {
             InternalError::io_err("Could not track event", None)
         })?;
 
@@ -90,8 +82,7 @@ impl Track<TrackedMetric> for PosthogTracker {
     }
 
     async fn track_event(&self, event: TrackedMetric) -> Result<Unit, PicaError> {
-        self.client.capture(event.track()?).await.map_err(|e| {
-            tracing::error!("Could not track event: {e}");
+        self.client.capture(event.track()?).await.map_err(|_| {
             InternalError::io_err("Could not track event", None)
         })?;
 
@@ -104,8 +95,7 @@ impl Track<TrackedMetric> for PosthogTracker {
             .map(|m| m.track())
             .collect::<Result<Vec<_>, _>>()?;
 
-        self.client.capture_batch(events).await.map_err(|e| {
-            tracing::error!("Could not track event: {e}");
+        self.client.capture_batch(events).await.map_err(|_| {
             InternalError::io_err("Could not track event", None)
         })?;
 
@@ -249,9 +239,7 @@ impl TrackedMetric {
                 let mut event = Event::new("$set", user_id);
 
                 for (key, value) in f_hashmap {
-                    event.insert_prop(key, value).inspect_err(|e| {
-                        tracing::error!("Could not insert prop: {e}");
-                    })?
+                    event.insert_prop(key, value)?
                 }
 
                 Ok(event)
