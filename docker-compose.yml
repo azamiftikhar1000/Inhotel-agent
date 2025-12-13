@@ -27,7 +27,10 @@ services:
 
   connections-api:
     platform: linux/amd64
-    image: us-docker.pkg.dev/integrationos/docker-oss/api:1.35.0
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    # image: us-docker.pkg.dev/integrationos/docker-oss/api:1.35.0
     ports:
       - 3005:3005
     environment:

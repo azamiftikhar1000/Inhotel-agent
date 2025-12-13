@@ -149,6 +149,28 @@ To stop the docker containers, simply run:
 pica stop
 ```
 
+### Testing API Locally
+
+To test the API locally, a JWT token is required. Ensure the `connections-api` service is built and running with the latest changes before generating the token.
+
+1. Build and run the `connections-api` service:
+   ```bash
+   docker compose build connections-api
+   docker compose up connections-api
+   ```
+
+2. Install the required dependencies:
+   ```bash
+   cd scripts
+   npm install
+   ```
+
+3. Generate the token:
+   ```bash
+   node generate_jwt_token.js
+   ```
+
+
 
 ## License
 

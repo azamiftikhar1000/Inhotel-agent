@@ -212,3 +212,6 @@ test.docker-compose.yml
 fluvio-data/
 fluvio-metadata/
 mongo-data/
+
+#Deployment files
+deployment.yaml
