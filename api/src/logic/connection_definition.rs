@@ -1,4 +1,6 @@
-use super::{create, delete, read, update, HookExt, PublicExt, ReadResponse, RequestExt};
+use super::{
+    create, read, update, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse,
+};
 use crate::{
     helper::shape_mongo_filter,
     router::ServerResponse,
@@ -43,8 +45,101 @@ pub fn get_router() -> Router<Arc<AppState>> {
         .route(
             "/:id",
             patch(update::<CreateRequest, ConnectionDefinition>)
-                .delete(delete::<CreateRequest, ConnectionDefinition>),
+                .delete(delete_by_connection_definition_id),
         )
+}
+
+pub async fn delete_by_connection_definition_id(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ServerResponse<SuccessResponse>>, PicaError> {
+    let stores = &state.app_stores;
+
+    // 1. ConnectionDefinition
+    stores
+        .connection_config
+        .collection
+        .delete_one(
+            doc! {
+                "_id": &id
+            },
+        )
+        .await
+        .map_err(|e| {
+            error!("Error deleting connection definition: {e}");
+            e
+        })?;
+
+    // 2. ConnectionModelDefinition
+    stores
+        .model_config
+        .collection
+        .delete_many(
+            doc! {
+                "connectionDefinitionId": &id
+            },
+        )
+        .await
+        .map_err(|e| {
+            error!("Error deleting connection model definitions: {e}");
+            e
+        })?;
+
+    // 3. ConnectionModelSchema
+    stores
+        .model_schema
+        .collection
+        .delete_many(
+            doc! {
+                "connectionDefinitionId": &id
+            },
+        )
+        .await
+        .map_err(|e| {
+            error!("Error deleting connection model schemas: {e}");
+            e
+        })?;
+
+    // 4. PlatformData
+    stores
+        .platform
+        .collection
+        .delete_many(
+            doc! {
+                "connectionDefinitionId": &id
+            },
+        )
+        .await
+        .map_err(|e| {
+            error!("Error deleting platform data: {e}");
+            e
+        })?;
+
+    // 5. Settings
+    stores
+        .settings
+        .update_many(
+            doc! {
+                "connectedPlatforms.connectionDefinitionId": &id
+            },
+            doc! {
+                "$pull": {
+                    "connectedPlatforms": {
+                        "connectionDefinitionId": &id
+                    }
+                }
+            },
+        )
+        .await
+        .map_err(|e| {
+            error!("Error updating settings: {e}");
+            e
+        })?;
+
+    Ok(Json(ServerResponse::new(
+        "delete",
+        SuccessResponse { success: true },
+    )))
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Dummy)]

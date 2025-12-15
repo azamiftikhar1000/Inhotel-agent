@@ -1,4 +1,6 @@
-use super::{create, delete, read, update, HookExt, PublicExt, ReadResponse, RequestExt};
+use super::{
+    create, delete, read, update, HookExt, PublicExt, ReadResponse, RequestExt,
+};
 use crate::{
     helper::shape_mongo_filter,
     router::ServerResponse,
@@ -19,12 +21,16 @@ use osentities::{
     api_model_config::{
         ApiModelConfig, AuthMethod, ModelPaths, ResponseBody, SamplesInput, SchemasInput,
     },
+    connection_definition::ConnectionDefinition,
     connection_model_definition::{
         ConnectionModelDefinition, CrudAction, CrudMapping, ExtractorConfig, PlatformInfo,
         TestConnection, TestConnectionState,
     },
+    connection_model_schema::ConnectionModelSchema,
+    connection_oauth_definition::Settings,
     event_access::EventAccess,
     id::{prefix::IdPrefix, Id},
+    platform::PlatformData,
     ApplicationError, InternalError, PicaError,
 };
 use semver::Version;
@@ -271,6 +277,7 @@ pub async fn test_connection_model_definition(
         response,
     )))
 }
+
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Dummy)]
 #[serde(rename_all = "camelCase")]
