@@ -24,6 +24,7 @@ use osentities::{
     connection_model_definition::ConnectionModelDefinition,
     connection_model_schema::{ConnectionModelSchema, PublicConnectionModelSchema},
     connection_oauth_definition::{ConnectionOAuthDefinition, Settings},
+    connection_variable_mapping::ConnectionVariableMapping,
     event_access::EventAccess,
     page::PlatformPage,
     secret::Secret,
@@ -60,6 +61,7 @@ pub struct AppStores {
     pub secrets: MongoStore<Secret>,
     pub settings: MongoStore<Settings>,
     pub tasks: MongoStore<Task>,
+    pub connection_variable_mapping: MongoStore<ConnectionVariableMapping>,
 }
 
 #[derive(Clone)]
@@ -118,6 +120,8 @@ impl Server {
         let clients = MongoStore::new(&db, &Store::Clients).await?;
         let secrets_store = MongoStore::<Secret>::new(&db, &Store::Secrets).await?;
         let tasks = MongoStore::new(&db, &Store::Tasks).await?;
+        let connection_variable_mapping =
+            MongoStore::new(&db, &Store::ConnectionVariableMappings).await?;
 
         let secrets_client: Arc<dyn SecretExt + Sync + Send> = match config.secrets_config.provider
         {
@@ -177,6 +181,7 @@ impl Server {
             event,
             clients,
             tasks,
+            connection_variable_mapping,
         };
 
         let event_access_cache =

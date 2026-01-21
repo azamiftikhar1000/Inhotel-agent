@@ -100,5 +100,7 @@ generate_stores!(
     Transactions,
     "event-transactions",
     Clients,
-    "clients"
+    "clients",
+    ConnectionVariableMappings,
+    "connection-variable-mappings"
 );

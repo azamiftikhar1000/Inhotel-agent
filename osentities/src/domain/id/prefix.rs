@@ -35,6 +35,7 @@ pub enum IdPrefix {
     UnitTest,
     EarlyAccess,
     Task,
+    ConnectionVariableMapping,
 }
 
 impl Display for IdPrefix {
@@ -71,6 +72,7 @@ impl Display for IdPrefix {
             IdPrefix::UnitTest => write!(f, "ut"),
             IdPrefix::EarlyAccess => write!(f, "ea"),
             IdPrefix::Task => write!(f, "task"),
+            IdPrefix::ConnectionVariableMapping => write!(f, "conn_var_map"),
         }
     }
 }
@@ -111,6 +113,7 @@ impl TryFrom<&str> for IdPrefix {
             "ut" => Ok(IdPrefix::UnitTest),
             "ea" => Ok(IdPrefix::EarlyAccess),
             "task" => Ok(IdPrefix::Task),
+            "conn_var_map" => Ok(IdPrefix::ConnectionVariableMapping),
             _ => Err(InternalError::invalid_argument(
                 &format!("Invalid ID prefix: {}", s),
                 None,
@@ -153,6 +156,7 @@ impl From<IdPrefix> for String {
             IdPrefix::UnitTest => "ut".to_string(),
             IdPrefix::EarlyAccess => "ea".to_string(),
             IdPrefix::Task => "task".to_string(),
+            IdPrefix::ConnectionVariableMapping => "conn_var_map".to_string(),
         }
     }
 }
