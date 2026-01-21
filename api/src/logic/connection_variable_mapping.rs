@@ -1,17 +1,19 @@
-use super::{delete, read, update, HookExt, PublicExt, RequestExt};
+use super::{HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse};
 use crate::{
+    helper::shape_mongo_filter,
     router::ServerResponse,
     server::{AppState, AppStores},
 };
 use axum::{
-    extract::{State, Json},
+    extract::{Path, Query, State, Json},
     http::StatusCode,
     response::IntoResponse,
-    routing::{patch, post},
+    routing::{delete, get, patch, post},
     Extension, Router,
 };
 use bson::doc;
 use chrono::Utc;
+use http::HeaderMap;
 use osentities::{
     algebra::MongoStore,
     connection_variable_mapping::{
@@ -24,20 +26,131 @@ use osentities::{
     ApplicationError, InternalError, PicaError,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use serde_json::Value;
+use std::{collections::BTreeMap, sync::Arc};
+use tracing::error;
 
 pub fn get_router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
             "/",
             post(create_mapping)
-                .get(read::<CreateRequest, ConnectionVariableMapping>),
+                .get(read_mappings), // Custom handler without ownership filtering
         )
         .route(
             "/:id",
-            patch(update::<CreateRequest, ConnectionVariableMapping>)
-                .delete(delete::<CreateRequest, ConnectionVariableMapping>),
+            patch(update_mapping)  // Custom handler without ownership filtering
+                .delete(delete_mapping), // Custom handler without ownership filtering
         )
+}
+
+/// Custom read handler that returns ALL platform-level mappings without ownership filtering.
+/// This is necessary because ConnectionVariableMappings are shared across all users of a platform.
+async fn read_mappings(
+    headers: HeaderMap,
+    query: Option<Query<BTreeMap<String, String>>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ServerResponse<ReadResponse<Value>>>, PicaError> {
+    // Pass None for event_access to bypass ownership filtering
+    let query_params = shape_mongo_filter(query, None, Some(headers));
+
+    let store = state.app_stores.connection_variable_mapping.clone();
+
+    let rows: Vec<ConnectionVariableMapping> = store
+        .get_many(
+            Some(query_params.filter.clone()),
+            None,
+            None,
+            Some(query_params.limit),
+            Some(query_params.skip),
+        )
+        .await?;
+
+    let total = store.count(query_params.filter, None).await?;
+
+    let res = ReadResponse {
+        rows: rows.into_iter().map(CreateRequest::public).collect(),
+        skip: query_params.skip,
+        limit: query_params.limit,
+        total,
+    };
+
+    Ok(Json(ServerResponse::new("read", res)))
+}
+
+/// Custom update handler without ownership filtering.
+/// Platform-level mappings can be updated by any authenticated user.
+async fn update_mapping(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateRequest>,
+) -> Result<Json<ServerResponse<SuccessResponse>>, PicaError> {
+    let store = state.app_stores.connection_variable_mapping.clone();
+
+    // Platform-level: no ownership filter, just find by ID
+    let filter = doc! {
+        "_id": &id,
+        "deleted": false,
+    };
+
+    let Some(record) = store.get_one(filter).await? else {
+        return Err(ApplicationError::not_found(
+            &format!("Mapping with id {} not found", id),
+            None,
+        ));
+    };
+
+    let updated_record = payload.update(record);
+
+    let bson = bson::to_bson_with_options(&updated_record, Default::default()).map_err(|e| {
+        error!("Could not serialize record into document: {e}");
+        InternalError::serialize_error(e.to_string().as_str(), None)
+    })?;
+
+    let document = doc! { "$set": bson };
+
+    store.update_one(&id, document).await?;
+
+    Ok(Json(ServerResponse::new(
+        "update",
+        SuccessResponse { success: true },
+    )))
+}
+
+/// Custom delete handler without ownership filtering.
+/// Platform-level mappings can be deleted by any authenticated user (soft delete).
+async fn delete_mapping(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ServerResponse<Value>>, PicaError> {
+    let store = state.app_stores.connection_variable_mapping.clone();
+
+    // Platform-level: no ownership filter, just find by ID
+    let filter = doc! {
+        "_id": &id,
+        "deleted": false,
+    };
+
+    let Some(record) = store.get_one(filter).await? else {
+        return Err(ApplicationError::not_found(
+            &format!("Mapping with id {} not found", id),
+            None,
+        ));
+    };
+
+    // Soft delete
+    store
+        .update_one(
+            &id,
+            doc! {
+                "$set": {
+                    "deleted": true,
+                }
+            },
+        )
+        .await?;
+
+    Ok(Json(ServerResponse::new("delete", CreateRequest::public(record))))
 }
 
 async fn create_mapping(
@@ -46,12 +159,12 @@ async fn create_mapping(
     Json(payload): Json<CreateRequest>,
 ) -> Result<impl IntoResponse, PicaError> {
     let stores = &state.app_stores;
-    // Check if mapping already exists for this definition
-    let mut filter = doc! {
+    // Check if mapping already exists for this definition (platform-level, no ownership filter)
+    // Mappings are shared across all users of a platform, so uniqueness is global
+    let filter = doc! {
         "connectionModelDefinitionId": payload.connection_model_definition_id.to_string(),
         "deleted": false,
     };
-    filter.insert("ownership.buildableId", access.ownership.id.to_string());
 
     let existing = stores
         .connection_variable_mapping
@@ -98,6 +211,9 @@ pub struct CreateRequest {
     /// The model definition this mapping applies to (Platform Level)
     pub connection_model_definition_id: Id,
 
+    /// The platform this mapping belongs to (e.g., "blaze", "salesforce")
+    pub connection_platform: String,
+
     /// List of variable-to-parameter bindings
     pub bindings: Vec<BindingRequest>,
 }
@@ -135,6 +251,7 @@ impl RequestExt for CreateRequest {
                 .id
                 .unwrap_or_else(|| Id::now(IdPrefix::ConnectionVariableMapping)),
             connection_model_definition_id: self.connection_model_definition_id,
+            connection_platform: self.connection_platform.clone(),
             bindings: self
                 .bindings
                 .iter()
@@ -157,6 +274,7 @@ impl RequestExt for CreateRequest {
 
     fn update(&self, mut record: Self::Output) -> Self::Output {
         record.connection_model_definition_id = self.connection_model_definition_id;
+        record.connection_platform = self.connection_platform.clone();
         record.bindings = self
             .bindings
             .iter()

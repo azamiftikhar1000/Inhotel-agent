@@ -21,6 +21,10 @@ pub struct ConnectionVariableMapping {
     /// The model definition this mapping applies to (Platform Level)
     pub connection_model_definition_id: Id,
     
+    /// The platform this mapping belongs to (e.g., "blaze", "salesforce")
+    /// Used for filtering and grouping mappings
+    pub connection_platform: String,
+    
     /// List of variable-to-parameter bindings
     pub bindings: Vec<VariableBinding>,
     

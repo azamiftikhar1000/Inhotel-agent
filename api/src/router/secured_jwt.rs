@@ -2,8 +2,8 @@ use crate::{
     logic::{
         common_enum, common_model, connection_definition,
         connection_model_definition::{self},
-        connection_model_schema, connection_oauth_definition, event_callback, openapi, platform,
-        platform_page, secrets,
+        connection_model_schema, connection_oauth_definition, connection_variable_mapping,
+        event_callback, openapi, platform, platform_page, secrets,
     },
     middleware::jwt_auth::{self, JwtState},
     server::AppState,
@@ -40,6 +40,10 @@ pub async fn get_router(state: &Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/event-callbacks", event_callback::get_router())
         .nest("/platform-pages", platform_page::get_router())
         .nest("/platforms", platform::get_router())
+        .nest(
+            "/connection-variable-mappings",
+            connection_variable_mapping::get_router(),
+        )
         .route("/admin/connection/:id", get(secrets::get_admin_secret))
         .route("/openapi", post(openapi::refresh_openapi));
 

@@ -5,7 +5,6 @@ use crate::{
         connection_model_schema::{
             public_get_connection_model_schema, PublicGetConnectionModelSchema,
         },
-        connection_variable_mapping,
         event_access, events, knowledge, metrics, oauth, passthrough, secrets, tasks, unified,
         vault_connection,
     },
@@ -46,10 +45,6 @@ pub async fn get_router(state: &Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/secrets", secrets::get_router())
         .nest("/unified", unified::get_router())
         .nest("/vault/connections", vault_connection::get_router())
-        .nest(
-            "/connection-variable-mappings",
-            connection_variable_mapping::get_router(),
-        )
         .route(
             "/connection-model-definitions/test/:id",
             post(test_connection_model_definition),
