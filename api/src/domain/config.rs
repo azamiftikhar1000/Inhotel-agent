@@ -61,6 +61,10 @@ pub struct ConnectionsConfig {
     /// This is the admin secret for the API. Be sure this value is not the one use to generate
     /// tokens for the users as it gives access to sensitive admin endpoints.
     pub jwt_secret: String,
+    #[envconfig(from = "BUILDABLE_SECRET", default = "")]
+    /// The buildable secret used for core tokens (isBuildableCore: true).
+    /// Combined with JWT_SECRET to verify tokens from typescript-services.
+    pub buildable_secret: String,
     #[envconfig(from = "CONNECTIONS_URL", default = "http://localhost:3005")]
     /// Same as self url, but this may vary in a k8s environment hence it's a separate config
     pub connections_url: String,
