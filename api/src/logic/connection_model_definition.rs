@@ -1,5 +1,5 @@
 use super::{
-    create, delete, read, update, HookExt, PublicExt, ReadResponse, RequestExt,
+    create, delete, read, update, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse,
 };
 use crate::{
     helper::shape_mongo_filter,
@@ -48,13 +48,210 @@ pub fn get_router() -> Router<Arc<AppState>> {
         .route(
             "/",
             post(create::<CreateRequest, ConnectionModelDefinition>)
-                .get(read::<CreateRequest, ConnectionModelDefinition>),
+                .get(read::<CreateRequest, ConnectionModelDefinition>)
+                .patch(update_many),
         )
         .route(
             "/:id",
             patch(update::<CreateRequest, ConnectionModelDefinition>)
                 .delete(delete::<CreateRequest, ConnectionModelDefinition>),
         )
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchUpdateResult {
+    pub id: Option<String>,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PartialUpdateRequest {
+    #[serde(rename = "_id")]
+    pub id: Option<Id>,
+    pub connection_platform: Option<String>,
+    pub connection_definition_id: Option<Id>,
+    pub platform_version: Option<String>,
+    pub title: Option<String>,
+    pub name: Option<String>,
+    pub model_name: Option<String>,
+    pub base_url: Option<String>,
+    pub path: Option<String>,
+    pub auth_method: Option<AuthMethod>,
+    pub action_name: Option<CrudAction>,
+    #[serde(with = "http_serde_ext_ios::method::option", rename = "action", default)]
+    pub http_method: Option<http::Method>,
+    #[serde(
+        with = "http_serde_ext_ios::header_map::option",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub headers: Option<HeaderMap>,
+    pub query_params: Option<BTreeMap<String, String>>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub extractor_config: Option<ExtractorConfig>,
+    pub schemas: Option<SchemasInput>,
+    pub samples: Option<SamplesInput>,
+    pub responses: Option<Vec<ResponseBody>>,
+    pub version: Option<Version>,
+    pub is_default_crud_mapping: Option<bool>,
+    pub test_connection_payload: Option<Value>,
+    pub test_connection_status: Option<TestConnection>,
+    pub mapping: Option<CrudMapping>,
+    pub paths: Option<ModelPaths>,
+    pub supported: Option<bool>,
+    pub active: Option<bool>,
+    pub knowledge: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
+pub async fn update_many(
+    access: Option<Extension<Arc<EventAccess>>>,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<Vec<PartialUpdateRequest>>,
+) -> Result<Json<ServerResponse<Vec<BatchUpdateResult>>>, PicaError> {
+    let mut results = Vec::new();
+
+    for request in payload {
+        let id_str = match &request.id {
+            Some(id) => id.to_string(),
+            None => {
+                results.push(BatchUpdateResult {
+                    id: None,
+                    success: false,
+                    error: Some("Missing ID".to_string()),
+                });
+                continue;
+            }
+        };
+
+        let mut query = shape_mongo_filter(
+            None,
+            access.clone().map(|e| {
+                let Extension(e) = e;
+                e
+            }),
+            None,
+        );
+        query.filter.insert("_id", &id_str);
+
+        let store = CreateRequest::get_store(state.app_stores.clone());
+
+        match store.get_one(query.filter).await {
+            Ok(Some(mut record)) => {
+                // Merging Logic
+                if let Some(val) = request.connection_platform { record.connection_platform = val; }
+                if let Some(val) = request.connection_definition_id { record.connection_definition_id = val; }
+                if let Some(val) = request.platform_version { record.platform_version = val; }
+                if let Some(val) = request.title { record.title = val; }
+                if let Some(val) = request.name { record.name = val; }
+                if let Some(val) = request.model_name { record.model_name = val; }
+                if let Some(val) = request.action_name { record.action_name = val; }
+                if let Some(val) = request.http_method { record.action = val; }
+                
+                // ApiModelConfig Merge
+                if let PlatformInfo::Api(ref mut api_config) = record.platform_info {
+                    if let Some(val) = request.base_url { api_config.base_url = val; }
+                    if let Some(val) = request.path { api_config.path = val; }
+                    if let Some(val) = request.auth_method { api_config.auth_method = val; }
+                    if let Some(val) = request.headers { api_config.headers = Some(val); }
+                    if let Some(val) = request.query_params { api_config.query_params = Some(val); }
+                    if let Some(val) = request.schemas { api_config.schemas = val; }
+                    if let Some(val) = request.samples { api_config.samples = val; }
+                    if let Some(val) = request.responses { api_config.responses = val; }
+                    if let Some(val) = request.paths { api_config.paths = Some(val); }
+                }
+
+                if let Some(val) = request.extractor_config { record.extractor_config = Some(val); }
+                if let Some(val) = request.version { record.record_metadata.version = val; }
+                if let Some(val) = request.is_default_crud_mapping { record.is_default_crud_mapping = Some(val); }
+                if let Some(val) = request.test_connection_payload { record.test_connection_payload = Some(val); }
+                if let Some(val) = request.test_connection_status { record.test_connection_status = val; }
+                if let Some(val) = request.mapping { record.mapping = Some(val); }
+                if let Some(val) = request.supported { record.supported = val; }
+                if let Some(val) = request.active { record.record_metadata.active = val; }
+                if let Some(val) = request.knowledge { record.knowledge = Some(val); }
+                if let Some(val) = request.tags { record.record_metadata.tags = val; }
+
+                // Regenerate Key (Same logic as RequestExt)
+                // Note: If fields involved in key generation didn't change, this stays same, 
+                // but we regenerate to be safe if any one of them changed.
+                 // Key generation relies on: connection_platform, platform_version, model_name, action_name, path, name
+                 // We need 'path' which is inside api_config.
+                let path_val = if let PlatformInfo::Api(ref api_config) = record.platform_info {
+                    api_config.path.clone()
+                } else {
+                    String::new()
+                };
+
+                let key = format!(
+                    "api::{}::{}::{}::{}::{}::{}",
+                    record.connection_platform,
+                    record.platform_version,
+                    record.model_name,
+                    record.action_name,
+                    path_val,
+                    record.name
+                ).to_lowercase();
+                record.key = key;
+
+                let bson_result = bson::to_bson_with_options(&record, Default::default());
+
+                match bson_result {
+                    Ok(bson) => {
+                        let document = doc! { "$set": bson };
+                        match store.update_one(&id_str, document).await {
+                            Ok(_) => {
+                            CreateRequest::after_update_hook(&record, &state.app_stores)
+                                    .await
+                                    .ok();
+                                results.push(BatchUpdateResult {
+                                    id: Some(id_str),
+                                    success: true,
+                                    error: None,
+                                });
+                            }
+                            Err(e) => {
+                                error!("Error updating in store: {e}");
+                                results.push(BatchUpdateResult {
+                                    id: Some(id_str),
+                                    success: false,
+                                    error: Some(e.to_string()),
+                                });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                         error!("Could not serialize record into document: {e}");
+                         results.push(BatchUpdateResult {
+                            id: Some(id_str),
+                            success: false,
+                            error: Some(e.to_string()),
+                        });
+                    }
+                }
+            }
+            Ok(None) => {
+                results.push(BatchUpdateResult {
+                    id: Some(id_str),
+                    success: false,
+                    error: Some("Record not found".to_string()),
+                });
+            }
+            Err(e) => {
+                error!("Error getting record in store: {e}");
+                 results.push(BatchUpdateResult {
+                    id: Some(id_str),
+                    success: false,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(Json(ServerResponse::new("batch_update", results)))
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

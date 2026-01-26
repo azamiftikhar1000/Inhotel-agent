@@ -327,3 +327,103 @@ async fn test_common_model_crud() {
 
     assert!(get_models.rows.is_empty());
 }
+
+#[tokio::test]
+async fn test_connection_model_definitions_batch_update() {
+    let server = TestServer::new(None).await;
+
+    // 1. Create two Connection Model Definitions
+    let payload1: connection_model_definition::CreateRequest = Faker.fake();
+    let payload1_json = serde_json::to_value(&payload1).unwrap();
+    let res1 = server
+        .send_request::<Value, Value>(
+            "v1/connection-model-definitions",
+            Method::POST,
+            Some(&server.live_key),
+            Some(&payload1_json),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res1.code, StatusCode::OK);
+    let model1: ConnectionModelDefinition = serde_json::from_value(res1.data).expect("Failed to deserialize model 1");
+
+    let payload2: connection_model_definition::CreateRequest = Faker.fake();
+    let payload2_json = serde_json::to_value(&payload2).unwrap();
+    let res2 = server
+        .send_request::<Value, Value>(
+            "v1/connection-model-definitions",
+            Method::POST,
+            Some(&server.live_key),
+            Some(&payload2_json),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res2.code, StatusCode::OK);
+    let model2: ConnectionModelDefinition = serde_json::from_value(res2.data).expect("Failed to deserialize model 2");
+
+    // 2. Prepare Batch Update Payload
+    // 2. Prepare Batch Update Payload - using partial structure via json!
+    // We only update connection_platform, other fields (like name/title) should remain untouched.
+    
+    let update_payload1 = json!({
+        "_id": model1.id,
+        "connectionPlatform": "UpdatedPlatform1"
+    });
+
+    let update_payload2 = json!({
+        "_id": model2.id,
+        "connectionPlatform": "UpdatedPlatform2"
+    });
+
+    let batch_json = json!([update_payload1, update_payload2]);
+
+    // 3. Send Batch Update Request
+    let res = server
+        .send_request::<Value, Value>(
+            "v1/connection-model-definitions",
+            Method::PATCH,
+            Some(&server.live_key),
+            Some(&batch_json),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(res.code, StatusCode::OK);
+
+    // 4. Verify Response
+    let results: Vec<connection_model_definition::BatchUpdateResult> = serde_json::from_value(res.data).expect("Failed to deserialize batch results");
+    assert_eq!(results.len(), 2);
+
+    let result1 = results.iter().find(|r| r.id.as_ref() == Some(&model1.id.to_string())).expect("Result for model 1 not found");
+    assert!(result1.success);
+
+    let result2 = results.iter().find(|r| r.id.as_ref() == Some(&model2.id.to_string())).expect("Result for model 2 not found");
+    assert!(result2.success);
+
+    // 5. Verify Database State
+    let res_get1 = server
+        .send_request::<Value, Value>(
+            &format!("v1/connection-model-definitions?_id={}", model1.id),
+            Method::GET,
+            Some(&server.live_key),
+            None,
+        )
+        .await
+        .unwrap();
+    let response1: ReadResponse<ConnectionModelDefinition> = serde_json::from_value(res_get1.data).unwrap();
+    let updated_model1 = response1.rows.first().expect("Model 1 not found");
+    assert_eq!(updated_model1.connection_platform, "UpdatedPlatform1");
+
+    let res_get2 = server
+        .send_request::<Value, Value>(
+            &format!("v1/connection-model-definitions?_id={}", model2.id),
+            Method::GET,
+            Some(&server.live_key),
+            None,
+        )
+        .await
+        .unwrap();
+    let response2: ReadResponse<ConnectionModelDefinition> = serde_json::from_value(res_get2.data).unwrap();
+    let updated_model2 = response2.rows.first().expect("Model 2 not found");
+    assert_eq!(updated_model2.connection_platform, "UpdatedPlatform2");
+}
