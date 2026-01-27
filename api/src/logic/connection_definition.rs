@@ -482,6 +482,31 @@ impl RequestExt for CreateRequest {
         record.platform.clone_from(&self.platform);
         record.multi_env = self.multi_env;
         record.record_metadata.active = self.active;
+
+        // Update authentication fields
+        let auth_secrets: Vec<AuthSecret> = self
+            .authentication
+            .iter()
+            .map(|item| AuthSecret {
+                name: item.name.to_string(),
+            })
+            .collect();
+
+        let connection_form_items: Vec<FormDataItem> = self
+            .authentication
+            .iter()
+            .map(|item| FormDataItem {
+                name: item.name.clone(),
+                r#type: item.r#type.clone(),
+                label: item.label.clone(),
+                placeholder: item.placeholder.clone(),
+            })
+            .collect();
+
+        record.auth_secrets = auth_secrets;
+        record.auth_method.clone_from(&self.auth_method);
+        record.frontend.connection_form.form_data = connection_form_items;
+
         record
     }
 
