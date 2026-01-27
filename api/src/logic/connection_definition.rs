@@ -480,8 +480,49 @@ impl RequestExt for CreateRequest {
         record.frontend.spec.tags.clone_from(&self.tags);
         record.test_connection = self.test_connection;
         record.platform.clone_from(&self.platform);
+        record.platform_version.clone_from(&self.platform_version);
         record.multi_env = self.multi_env;
         record.record_metadata.active = self.active;
+        record.status = self.status.clone();
+        record.r#type = self.r#type.clone();
+        record.auth_method = self.auth_method.clone();
+        record.paths = self.paths.clone();
+        record.settings = self.settings.clone();
+        record.test_delay_in_millis = self.test_delay_in_millis;
+        record.frontend.spec.helper_link = self.helper_link.clone();
+        record.frontend.spec.markdown = self.markdown.clone();
+        
+        // Update authentication and derived fields
+        let auth_secrets: Vec<AuthSecret> = self
+            .authentication
+            .iter()
+            .map(|item| AuthSecret {
+                name: item.name.to_string(),
+            })
+            .collect();
+
+        let connection_form_items: Vec<FormDataItem> = self
+            .authentication
+            .iter()
+            .map(|item| FormDataItem {
+                name: item.name.clone(),
+                r#type: item.r#type.clone(),
+                label: item.label.clone(),
+                placeholder: item.placeholder.clone(),
+            })
+            .collect();
+
+        record.auth_secrets = auth_secrets;
+        record.frontend.connection_form = ConnectionForm {
+            name: "Connect".to_string(),
+            description: "Securely connect your account".to_string(),
+            form_data: connection_form_items,
+        };
+
+        // Regenerate key if platform or platform_version changed
+        let key = format!("api::{}::{}", self.platform, self.platform_version);
+        record.key = key;
+
         record
     }
 
