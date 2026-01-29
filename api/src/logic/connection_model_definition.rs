@@ -598,6 +598,7 @@ impl RequestExt for CreateRequest {
         record.platform_version.clone_from(&self.platform_version);
         record.title.clone_from(&self.title);
         record.name.clone_from(&self.name);
+        record.model_name.clone_from(&self.model_name);
         record.action = self.http_method.clone();
         record.action_name = self.action_name.clone();
         record.platform_info = PlatformInfo::Api(ApiModelConfig {
