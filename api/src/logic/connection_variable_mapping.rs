@@ -193,7 +193,7 @@ async fn create_mapping(
         InternalError::unknown("Failed to create record from request", None)
     })?;
 
-    let created = stores
+    let _created = stores
         .connection_variable_mapping
         .create_one(&record)
         .await

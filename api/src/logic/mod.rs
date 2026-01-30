@@ -210,7 +210,7 @@ pub async fn update<T, U>(
     Json(payload): Json<T>,
 ) -> Result<Json<ServerResponse<SuccessResponse>>, PicaError>
 where
-    T: RequestExt<Output = U> + HookExt<U> + 'static,
+    T: RequestExt<Output = U> + HookExt<U> + Serialize + 'static,
     U: Serialize + DeserializeOwned + Unpin + Sync + Send + 'static,
 {
     let mut query = shape_mongo_filter(
