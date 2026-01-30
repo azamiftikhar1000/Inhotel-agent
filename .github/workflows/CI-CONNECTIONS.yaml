@@ -119,4 +119,4 @@ jobs:
 
           # Apply changes
           kubectl apply -k k8s/
-          kubectl rollout status deployment/connections-api
+          kubectl rollout status deployment/connections-api --namespace=inhotel-agent-app
