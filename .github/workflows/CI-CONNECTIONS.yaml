@@ -55,6 +55,37 @@ jobs:
           cluster_name: ${{ env.CLUSTER_NAME }}
           location: ${{ env.CLUSTER_LOCATION }}
 
+      # Deploy Secrets
+      - name: Deploy Secrets to GKE
+        run: |
+          kubectl create secret generic app-secrets \
+            --namespace=inhotel-agent-app \
+            --from-literal=MONGO_URI='${{ secrets.MONGO_URI }}' \
+            --from-literal=CONTEXT_DATABASE_URL='${{ secrets.CONTEXT_DATABASE_URL }}' \
+            --from-literal=CONTROL_DATABASE_URL='${{ secrets.CONTROL_DATABASE_URL }}' \
+            --from-literal=EVENT_DATABASE_URL='${{ secrets.EVENT_DATABASE_URL }}' \
+            --from-literal=MONGO_PASSWORD='${{ secrets.MONGO_PASSWORD }}' \
+            --from-literal=MONGO_INITDB_ROOT_USERNAME='${{ secrets.MONGO_INITDB_ROOT_USERNAME }}' \
+            --from-literal=GCP_PROJECT_ID='${{ secrets.GCP_PROJECT_ID }}' \
+            --from-literal=GCP_LOCATION_ID='${{ secrets.GCP_LOCATION_ID }}' \
+            --from-literal=KMS_KEY_RING_ID='${{ secrets.KMS_KEY_RING_ID }}' \
+            --from-literal=KMS_KEY_ID='${{ secrets.KMS_KEY_ID }}' \
+            --from-literal=IOS_CRYPTO_SECRET='${{ secrets.IOS_CRYPTO_SECRET }}' \
+            --from-literal=GATEWAY_SECRET='${{ secrets.GATEWAY_SECRET }}' \
+            --from-literal=JWT_SECRET='${{ secrets.JWT_SECRET }}' \
+            --from-literal=EVENT_ACCESS_PASSWORD='${{ secrets.EVENT_ACCESS_PASSWORD }}' \
+            --from-literal=ENGINEERING_ACCOUNT_BUILDABLE_ID='${{ secrets.ENGINEERING_ACCOUNT_BUILDABLE_ID }}' \
+            --from-literal=BUILDABLE_SECRET='${{ secrets.BUILDABLE_SECRET }}' \
+            --from-literal=CORE_USER_SECRET='${{ secrets.CORE_USER_SECRET }}' \
+            --from-literal=DEFAULT_LIVE_ACCESS_KEY='${{ secrets.DEFAULT_LIVE_ACCESS_KEY }}' \
+            --from-literal=DEFAULT_TEST_ACCESS_KEY='${{ secrets.DEFAULT_TEST_ACCESS_KEY }}' \
+            --from-literal=DEVELOPER_ACCOUNT_ACCESS_KEY='${{ secrets.DEVELOPER_ACCOUNT_ACCESS_KEY }}' \
+            --from-literal=DEVELOPER_ACCOUNT_ID='${{ secrets.DEVELOPER_ACCOUNT_ID }}' \
+            --from-literal=QA_ACCOUNT_BUILDABLE_ID='${{ secrets.QA_ACCOUNT_BUILDABLE_ID }}' \
+            --from-literal=QA_ACCOUNT_EVENT_ACCESS_KEY='${{ secrets.QA_ACCOUNT_EVENT_ACCESS_KEY }}' \
+            --from-literal=DEMO_ACCOUNT_EVENT_ACCESS_KEY='${{ secrets.DEMO_ACCOUNT_EVENT_ACCESS_KEY }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       # Deploy
       - name: Deploy to GKE
         run: |
