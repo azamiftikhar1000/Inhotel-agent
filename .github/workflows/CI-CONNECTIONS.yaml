@@ -34,8 +34,7 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v1
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
           token_format: 'access_token'
 
       # 2. Setup gcloud
@@ -102,7 +101,7 @@ jobs:
         run: |
           kubectl create secret generic gcloud-config \
             --namespace=inhotel-agent-app \
-            --from-literal=application_default_credentials.json='${{ secrets.GCP_CREDENTIALS_JSON }}' \
+            --from-literal=application_default_credentials.json='${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # Deploy
