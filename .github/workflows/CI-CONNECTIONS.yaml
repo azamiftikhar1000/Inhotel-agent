@@ -34,8 +34,8 @@ jobs:
       - uses: integration-os/google-artifact-registry-action@v2
         with:
           image: "${{ env.IMAGE_NAME }}:${{ env.docker_image_tag }}"
-          service_account: github-actions@integrationos.iam.gserviceaccount.com
-          workload_identity_provider: projects/356173785332/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           file: api/Dockerfile
           context: .
           build-args: |
@@ -45,8 +45,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v1
         with:
-          workload_identity_provider: projects/356173785332/locations/global/workloadIdentityPools/github-actions/providers/github-actions
-          service_account: github-actions@integrationos.iam.gserviceaccount.com
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       # Get GKE Credentials
       - name: Get GKE Credentials
