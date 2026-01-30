@@ -1,0 +1,62 @@
+name: Deploy Connections API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/CI-CONNECTIONS.yaml
+      - "api/**"
+      - "cache/**"
+      - "entities/**"
+      - "unified/**"
+      - Cargo.lock
+      - Dockerfile.common
+      - api/Dockerfile
+
+env:
+  docker_image_tag: ${{ github.sha }}
+  IMAGE_NAME: gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections
+  CLUSTER_NAME: inhotel-agent
+  CLUSTER_LOCATION: europe-west6
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # Build and Push Container
+      - uses: integration-os/google-artifact-registry-action@v2
+        with:
+          image: "${{ env.IMAGE_NAME }}:${{ env.docker_image_tag }}"
+          service_account: github-actions@integrationos.iam.gserviceaccount.com
+          workload_identity_provider: projects/356173785332/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          file: api/Dockerfile
+          context: .
+          build-args: |
+            "EXECUTABLE=api"
+
+      # Authenticate to Google Cloud for kubectl
+      - id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          workload_identity_provider: projects/356173785332/locations/global/workloadIdentityPools/github-actions/providers/github-actions
+          service_account: github-actions@integrationos.iam.gserviceaccount.com
+
+      # Get GKE Credentials
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v1
+        with:
+          cluster_name: ${{ env.CLUSTER_NAME }}
+          location: ${{ env.CLUSTER_LOCATION }}
+
+      # Deploy
+      - name: Deploy to GKE
+        run: |
+          kubectl set image deployment/connections-api connections-api=${{ env.IMAGE_NAME }}:${{ env.docker_image_tag }}
+          kubectl rollout status deployment/connections-api
