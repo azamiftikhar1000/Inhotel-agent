@@ -63,9 +63,10 @@ jobs:
           chmod u+x kustomize
           mv kustomize /usr/local/bin/
 
-          # Update image tag
+          # Update image tag and namespace
           cd k8s
-          kustomize edit set image connections-api=${{ env.IMAGE_NAME }}:${{ env.docker_image_tag }}
+          kustomize edit set namespace inhotel-agent-app
+          kustomize edit set image gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections=${{ env.IMAGE_NAME }}:${{ env.docker_image_tag }}
           cd ..
 
           # Apply changes
