@@ -41,12 +41,8 @@ jobs:
           build-args: |
             "EXECUTABLE=api"
 
-      # Authenticate to Google Cloud for kubectl
-      - id: auth
-        uses: google-github-actions/auth@v1
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      # Authenticate to Google Cloud for kubectl (Removed redundant step)
+      # The previous step (integration-os/google-artifact-registry-action) already authenticates and sets GOOGLE_APPLICATION_CREDENTIALS
 
       # Get GKE Credentials
       - name: Get GKE Credentials
