@@ -1,0 +1,288 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: typescript-services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: typescript-services
+  template:
+    metadata:
+      labels:
+        app: typescript-services
+    spec:
+      containers:
+      - name: typescript-services
+        image: gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-typescript:debug2
+        ports:
+        - containerPort: 3001
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_URI
+        - name: CONTEXT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTEXT_DATABASE_URL
+        - name: CONTROL_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTROL_DATABASE_URL
+        - name: EVENT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EVENT_DATABASE_URL
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_PASSWORD
+        - name: ENGINEERING_ACCOUNT_BUILDABLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: ENGINEERING_ACCOUNT_BUILDABLE_ID
+        - name: EVENT_ACCESS_ENCRYPTION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EVENT_ACCESS_PASSWORD
+        - name: QA_ACCOUNT_BUILDABLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: QA_ACCOUNT_BUILDABLE_ID
+        - name: QA_ACCOUNT_EVENT_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: QA_ACCOUNT_EVENT_ACCESS_KEY
+        - name: DEMO_ACCOUNT_EVENT_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: DEMO_ACCOUNT_EVENT_ACCESS_KEY
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connections-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: connections-api
+  template:
+    metadata:
+      labels:
+        app: connections-api
+    spec:
+      containers:
+      - name: connections-api
+        image: gcr.io/inhotel-prod/artifacts/docker/inhotel-prod/inhotel-agent-connections:latest-user
+        ports:
+        - containerPort: 3005
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_URI
+        - name: CONTEXT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTEXT_DATABASE_URL
+        - name: CONTROL_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTROL_DATABASE_URL
+        - name: EVENT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EVENT_DATABASE_URL
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_PASSWORD
+        - name: ENGINEERING_ACCOUNT_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: ENGINEERING_ACCOUNT_BUILDABLE_ID
+        - name: BUILDABLE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: BUILDABLE_SECRET
+        - name: RUST_LOG
+          value: "api=info,tower_http=info,udm=info,osentities=info"
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/root/.config/gcloud/application_default_credentials.json"
+        volumeMounts:
+        - name: gcloud-config
+          mountPath: /root/.config/gcloud
+          readOnly: true
+      volumes:
+      - name: gcloud-config
+        secret:
+          secretName: gcloud-config
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oauth-refresh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oauth-refresh
+  template:
+    metadata:
+      labels:
+        app: oauth-refresh
+    spec:
+      containers:
+      - name: oauth-refresh
+        image: us-docker.pkg.dev/integrationos/docker-oss/oauth-refresh:1.32.1
+        ports:
+        - containerPort: 3003
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_URI
+        - name: CONTEXT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTEXT_DATABASE_URL
+        - name: CONTROL_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTROL_DATABASE_URL
+        - name: EVENT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EVENT_DATABASE_URL
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_PASSWORD
+        - name: RUST_LOG
+          value: "info"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: watchdog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: watchdog
+  template:
+    metadata:
+      labels:
+        app: watchdog
+    spec:
+      containers:
+      - name: watchdog
+        image: us-docker.pkg.dev/integrationos/docker-oss/watchdog:1.35.0
+        envFrom:
+        - configMapRef:
+            name: app-config
+        - secretRef:
+            name: app-secrets
+        env:
+        - name: MONGO_URI
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_URI
+        - name: CONTEXT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTEXT_DATABASE_URL
+        - name: CONTROL_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: CONTROL_DATABASE_URL
+        - name: EVENT_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: EVENT_DATABASE_URL
+        - name: MONGO_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: MONGO_PASSWORD
+        - name: RUST_LOG
+          value: "watchdog=info"
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.0
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "standard-rwo"
+      resources:
+        requests:
+          storage: 5Gi 
