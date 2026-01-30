@@ -86,6 +86,14 @@ jobs:
             --from-literal=DEMO_ACCOUNT_EVENT_ACCESS_KEY='${{ secrets.DEMO_ACCOUNT_EVENT_ACCESS_KEY }}' \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      # Deploy GCP Credentials (gcloud-config)
+      - name: Deploy GCP Credentials to GKE
+        run: |
+          kubectl create secret generic gcloud-config \
+            --namespace=inhotel-agent-app \
+            --from-literal=application_default_credentials.json='${{ secrets.GCP_CREDENTIALS_JSON }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       # Deploy
       - name: Deploy to GKE
         run: |
