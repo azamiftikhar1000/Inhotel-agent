@@ -215,7 +215,6 @@ mongo-data/
 
 #Deployment files
 deployment.yaml
-k8s/
 
 # Scripts
 *.py
