@@ -1,6 +1,4 @@
-use super::{
-    create, read, update, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse,
-};
+use super::{create, read, update, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse};
 use crate::{
     helper::shape_mongo_filter,
     router::ServerResponse,
@@ -59,11 +57,9 @@ pub async fn delete_by_connection_definition_id(
     stores
         .connection_config
         .collection
-        .delete_one(
-            doc! {
-                "_id": &id
-            },
-        )
+        .delete_one(doc! {
+            "_id": &id
+        })
         .await
         .map_err(|e| {
             error!("Error deleting connection definition: {e}");
@@ -74,11 +70,9 @@ pub async fn delete_by_connection_definition_id(
     stores
         .model_config
         .collection
-        .delete_many(
-            doc! {
-                "connectionDefinitionId": &id
-            },
-        )
+        .delete_many(doc! {
+            "connectionDefinitionId": &id
+        })
         .await
         .map_err(|e| {
             error!("Error deleting connection model definitions: {e}");
@@ -89,11 +83,9 @@ pub async fn delete_by_connection_definition_id(
     stores
         .model_schema
         .collection
-        .delete_many(
-            doc! {
-                "connectionDefinitionId": &id
-            },
-        )
+        .delete_many(doc! {
+            "connectionDefinitionId": &id
+        })
         .await
         .map_err(|e| {
             error!("Error deleting connection model schemas: {e}");
@@ -104,11 +96,9 @@ pub async fn delete_by_connection_definition_id(
     stores
         .platform
         .collection
-        .delete_many(
-            doc! {
-                "connectionDefinitionId": &id
-            },
-        )
+        .delete_many(doc! {
+            "connectionDefinitionId": &id
+        })
         .await
         .map_err(|e| {
             error!("Error deleting platform data: {e}");
@@ -521,6 +511,7 @@ impl RequestExt for CreateRequest {
 
         // Regenerate key if platform or platform_version changed
         let key = format!("api::{}::{}", self.platform, self.platform_version);
+        tracing::info!("Regenerating key for connection definition. Old key: {}, New key: {}", record.key, key);
         record.key = key;
 
         record

@@ -81,7 +81,11 @@ pub struct PartialUpdateRequest {
     pub path: Option<String>,
     pub auth_method: Option<AuthMethod>,
     pub action_name: Option<CrudAction>,
-    #[serde(with = "http_serde_ext_ios::method::option", rename = "action", default)]
+    #[serde(
+        with = "http_serde_ext_ios::method::option",
+        rename = "action",
+        default
+    )]
     pub http_method: Option<http::Method>,
     #[serde(
         with = "http_serde_ext_ios::header_map::option",
@@ -113,6 +117,7 @@ pub async fn update_many(
     Json(payload): Json<Vec<PartialUpdateRequest>>,
 ) -> Result<Json<ServerResponse<Vec<BatchUpdateResult>>>, PicaError> {
     let mut results = Vec::new();
+    tracing::info!("Starting update_many for {} connection model definitions", payload.len());
 
     for request in payload {
         let id_str = match &request.id {
@@ -142,44 +147,98 @@ pub async fn update_many(
         match store.get_one(query.filter).await {
             Ok(Some(mut record)) => {
                 // Merging Logic
-                if let Some(val) = request.connection_platform { record.connection_platform = val; }
-                if let Some(val) = request.connection_definition_id { record.connection_definition_id = val; }
-                if let Some(val) = request.platform_version { record.platform_version = val; }
-                if let Some(val) = request.title { record.title = val; }
-                if let Some(val) = request.name { record.name = val; }
-                if let Some(val) = request.model_name { record.model_name = val; }
-                if let Some(val) = request.action_name { record.action_name = val; }
-                if let Some(val) = request.http_method { record.action = val; }
-                
-                // ApiModelConfig Merge
-                if let PlatformInfo::Api(ref mut api_config) = record.platform_info {
-                    if let Some(val) = request.base_url { api_config.base_url = val; }
-                    if let Some(val) = request.path { api_config.path = val; }
-                    if let Some(val) = request.auth_method { api_config.auth_method = val; }
-                    if let Some(val) = request.headers { api_config.headers = Some(val); }
-                    if let Some(val) = request.query_params { api_config.query_params = Some(val); }
-                    if let Some(val) = request.schemas { api_config.schemas = val; }
-                    if let Some(val) = request.samples { api_config.samples = val; }
-                    if let Some(val) = request.responses { api_config.responses = val; }
-                    if let Some(val) = request.paths { api_config.paths = Some(val); }
+                if let Some(val) = request.connection_platform {
+                    record.connection_platform = val;
+                }
+                if let Some(val) = request.connection_definition_id {
+                    record.connection_definition_id = val;
+                }
+                if let Some(val) = request.platform_version {
+                    record.platform_version = val;
+                }
+                if let Some(val) = request.title {
+                    record.title = val;
+                }
+                if let Some(val) = request.name {
+                    record.name = val;
+                }
+                if let Some(val) = request.model_name {
+                    record.model_name = val;
+                }
+                if let Some(val) = request.action_name {
+                    record.action_name = val;
+                }
+                if let Some(val) = request.http_method {
+                    record.action = val;
                 }
 
-                if let Some(val) = request.extractor_config { record.extractor_config = Some(val); }
-                if let Some(val) = request.version { record.record_metadata.version = val; }
-                if let Some(val) = request.is_default_crud_mapping { record.is_default_crud_mapping = Some(val); }
-                if let Some(val) = request.test_connection_payload { record.test_connection_payload = Some(val); }
-                if let Some(val) = request.test_connection_status { record.test_connection_status = val; }
-                if let Some(val) = request.mapping { record.mapping = Some(val); }
-                if let Some(val) = request.supported { record.supported = val; }
-                if let Some(val) = request.active { record.record_metadata.active = val; }
-                if let Some(val) = request.knowledge { record.knowledge = Some(val); }
-                if let Some(val) = request.tags { record.record_metadata.tags = val; }
+                // ApiModelConfig Merge
+                if let PlatformInfo::Api(ref mut api_config) = record.platform_info {
+                    if let Some(val) = request.base_url {
+                        api_config.base_url = val;
+                    }
+                    if let Some(val) = request.path {
+                        api_config.path = val;
+                    }
+                    if let Some(val) = request.auth_method {
+                        api_config.auth_method = val;
+                    }
+                    if let Some(val) = request.headers {
+                        api_config.headers = Some(val);
+                    }
+                    if let Some(val) = request.query_params {
+                        api_config.query_params = Some(val);
+                    }
+                    if let Some(val) = request.schemas {
+                        api_config.schemas = val;
+                    }
+                    if let Some(val) = request.samples {
+                        api_config.samples = val;
+                    }
+                    if let Some(val) = request.responses {
+                        api_config.responses = val;
+                    }
+                    if let Some(val) = request.paths {
+                        api_config.paths = Some(val);
+                    }
+                }
+
+                if let Some(val) = request.extractor_config {
+                    record.extractor_config = Some(val);
+                }
+                if let Some(val) = request.version {
+                    record.record_metadata.version = val;
+                }
+                if let Some(val) = request.is_default_crud_mapping {
+                    record.is_default_crud_mapping = Some(val);
+                }
+                if let Some(val) = request.test_connection_payload {
+                    record.test_connection_payload = Some(val);
+                }
+                if let Some(val) = request.test_connection_status {
+                    record.test_connection_status = val;
+                }
+                if let Some(val) = request.mapping {
+                    record.mapping = Some(val);
+                }
+                if let Some(val) = request.supported {
+                    record.supported = val;
+                }
+                if let Some(val) = request.active {
+                    record.record_metadata.active = val;
+                }
+                if let Some(val) = request.knowledge {
+                    record.knowledge = Some(val);
+                }
+                if let Some(val) = request.tags {
+                    record.record_metadata.tags = val;
+                }
 
                 // Regenerate Key (Same logic as RequestExt)
-                // Note: If fields involved in key generation didn't change, this stays same, 
+                // Note: If fields involved in key generation didn't change, this stays same,
                 // but we regenerate to be safe if any one of them changed.
-                 // Key generation relies on: connection_platform, platform_version, model_name, action_name, path, name
-                 // We need 'path' which is inside api_config.
+                // Key generation relies on: connection_platform, platform_version, model_name, action_name, path, name
+                // We need 'path' which is inside api_config.
                 let path_val = if let PlatformInfo::Api(ref api_config) = record.platform_info {
                     api_config.path.clone()
                 } else {
@@ -194,7 +253,8 @@ pub async fn update_many(
                     record.action_name,
                     path_val,
                     record.name
-                ).to_lowercase();
+                )
+                .to_lowercase();
                 record.key = key;
 
                 let bson_result = bson::to_bson_with_options(&record, Default::default());
@@ -204,9 +264,10 @@ pub async fn update_many(
                         let document = doc! { "$set": bson };
                         match store.update_one(&id_str, document).await {
                             Ok(_) => {
-                            CreateRequest::after_update_hook(&record, &state.app_stores)
+                                CreateRequest::after_update_hook(&record, &state.app_stores)
                                     .await
                                     .ok();
+                                tracing::info!("Successfully updated connection model definition in update_many with id: {}", id_str);
                                 results.push(BatchUpdateResult {
                                     id: Some(id_str),
                                     success: true,
@@ -214,7 +275,7 @@ pub async fn update_many(
                                 });
                             }
                             Err(e) => {
-                                error!("Error updating in store: {e}");
+                                error!("Error updating in store in update_many for id {}: {}", id_str, e);
                                 results.push(BatchUpdateResult {
                                     id: Some(id_str),
                                     success: false,
@@ -224,8 +285,8 @@ pub async fn update_many(
                         }
                     }
                     Err(e) => {
-                         error!("Could not serialize record into document: {e}");
-                         results.push(BatchUpdateResult {
+                        error!("Could not serialize record into document: {e}");
+                        results.push(BatchUpdateResult {
                             id: Some(id_str),
                             success: false,
                             error: Some(e.to_string()),
@@ -242,7 +303,7 @@ pub async fn update_many(
             }
             Err(e) => {
                 error!("Error getting record in store: {e}");
-                 results.push(BatchUpdateResult {
+                results.push(BatchUpdateResult {
                     id: Some(id_str),
                     success: false,
                     error: Some(e.to_string()),
@@ -589,6 +650,11 @@ impl RequestExt for CreateRequest {
             self.name
         )
         .to_lowercase();
+
+        tracing::info!("Regenerating key for connection model definition. Old key: {}, New key: {}", record.key, key);
+        if record.key != key {
+            tracing::info!("Key changed for connection model definition! Triggered by fields update.");
+        }
 
         record.key = key;
         record

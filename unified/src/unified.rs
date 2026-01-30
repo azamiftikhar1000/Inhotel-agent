@@ -627,8 +627,6 @@ impl UnifiedDestination {
 
             for binding in mapping.bindings {
                 // Extract variable value from secret
-                // Extract variable value from secret
-                // Extract variable value from secret
                 let variable_value = if let Some(payload) = secret_value.get("OAUTH_REQUEST_PAYLOAD") {
                     payload
                         .get("formData")

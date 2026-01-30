@@ -225,6 +225,9 @@ where
 
     let store = T::get_store(state.app_stores.clone());
 
+    tracing::info!("Starting update for record with id: {}", id);
+    tracing::debug!("Update payload: {:?}", serde_json::to_string(&payload));
+
     let Some(record) = (match store.get_one(query.filter).await {
         Ok(ret) => ret,
         Err(e) => {
@@ -232,6 +235,7 @@ where
             return Err(e);
         }
     }) else {
+        tracing::warn!("Record with id {} not found for update", id);
         return Err(ApplicationError::not_found(
             &format!("Record with id {id} not found"),
             None,
@@ -251,6 +255,7 @@ where
 
     match store.update_one(&id, document).await {
         Ok(_) => {
+            tracing::info!("Successfully updated record with id: {}", id);
             T::after_update_hook(&record, &state.app_stores)
                 .await
                 .map_err(|e| {
@@ -263,7 +268,7 @@ where
             )))
         }
         Err(e) => {
-            error!("Error updating in store: {e}");
+            error!("Error updating in store for id {}: {}", id, e);
             Err(e)
         }
     }

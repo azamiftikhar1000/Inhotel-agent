@@ -1,9 +1,6 @@
 use crate::{
     id::Id,
-    prelude::shared::{
-        ownership::Ownership,
-        record_metadata::RecordMetadata,
-    },
+    prelude::shared::{ownership::Ownership, record_metadata::RecordMetadata},
     configuration::environment::Environment,
 };
 use serde::{Deserialize, Serialize};

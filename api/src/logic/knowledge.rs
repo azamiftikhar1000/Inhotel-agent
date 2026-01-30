@@ -7,7 +7,7 @@ use crate::{
 use axum::{
     extract::{Query, State},
     routing::get,
-    Router, Json,
+    Json, Router,
 };
 use bson::doc;
 use fake::Dummy;
