@@ -16,12 +16,14 @@ use chrono::Utc;
 use http::HeaderMap;
 use osentities::{
     algebra::MongoStore,
+    configuration::environment::Environment,
     connection_variable_mapping::{
         ConnectionVariableMapping, InjectionStrategy, ParameterLocation, VariableBinding,
         VariableDataType,
     },
     event_access::EventAccess,
     id::{prefix::IdPrefix, Id},
+    ownership::Ownership,
     record_metadata::RecordMetadata,
     ApplicationError, InternalError, PicaError,
 };
@@ -155,7 +157,6 @@ async fn delete_mapping(
 
 async fn create_mapping(
     State(state): State<Arc<AppState>>,
-    Extension(access): Extension<Arc<EventAccess>>,
     Json(payload): Json<CreateRequest>,
 ) -> Result<impl IntoResponse, PicaError> {
     let stores = &state.app_stores;
@@ -188,10 +189,8 @@ async fn create_mapping(
         ).into());
     }
 
-    // Proceed with creation using standard logic
-    let record = payload.access(access.clone()).ok_or_else(|| {
-        InternalError::unknown("Failed to create record from request", None)
-    })?;
+    // Create record directly - platform-level mappings don't need user-specific ownership
+    let record = payload.create_platform_record();
 
     let _created = stores
         .connection_variable_mapping
@@ -237,6 +236,36 @@ pub struct BindingRequest {
     /// Data type of the variable (for conversion)
     #[serde(default)]
     pub data_type: VariableDataType,
+}
+
+impl CreateRequest {
+    /// Creates a platform-level record without requiring EventAccess.
+    /// Platform-level mappings use default ownership and Live environment.
+    pub fn create_platform_record(&self) -> ConnectionVariableMapping {
+        ConnectionVariableMapping {
+            id: self
+                .id
+                .unwrap_or_else(|| Id::now(IdPrefix::ConnectionVariableMapping)),
+            connection_model_definition_id: self.connection_model_definition_id,
+            connection_platform: self.connection_platform.clone(),
+            bindings: self
+                .bindings
+                .iter()
+                .map(|b| VariableBinding {
+                    variable_name: b.variable_name.clone(),
+                    target_param: b.target_param.clone(),
+                    location: b.location.clone(),
+                    strategy: b.strategy.clone(),
+                    data_type: b.data_type.clone(),
+                })
+                .collect(),
+            // Platform-level mappings use default ownership
+            ownership: Ownership::default(),
+            // Use Live environment as default for platform-level mappings
+            environment: Environment::Live,
+            record_metadata: RecordMetadata::default(),
+        }
+    }
 }
 
 impl HookExt<ConnectionVariableMapping> for CreateRequest {}
