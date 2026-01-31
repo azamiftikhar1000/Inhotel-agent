@@ -143,6 +143,7 @@ pub struct CreateRequest {
     pub status: ConnectionStatus,
     pub r#type: ConnectionDefinitionType,
     pub name: String,
+    pub title: Option<String>,
     pub description: String,
     pub category: String,
     pub image: String,
@@ -432,7 +433,7 @@ impl RequestExt for CreateRequest {
             key,
             frontend: Frontend {
                 spec: Spec {
-                    title: self.name.clone(),
+                    title: self.title.clone().unwrap_or(self.name.clone()),
                     description: self.description.clone(),
                     platform: self.platform.clone(),
                     category: self.category.clone(),
@@ -460,6 +461,13 @@ impl RequestExt for CreateRequest {
 
     fn update(&self, mut record: Self::Output) -> Self::Output {
         record.name.clone_from(&self.name);
+        
+        if let Some(title) = &self.title {
+            record.frontend.spec.title.clone_from(title);
+        } else {
+            record.frontend.spec.title.clone_from(&self.name);
+        }
+
         record
             .frontend
             .spec
