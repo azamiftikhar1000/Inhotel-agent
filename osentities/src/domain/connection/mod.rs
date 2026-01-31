@@ -116,6 +116,8 @@ pub struct SanitizedConnection {
     pub has_error: bool,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub error: Option<String>,
+    #[serde(default)]
+    pub connection_definition_name: Option<String>,
     #[serde(flatten, default)]
     pub record_metadata: RecordMetadata,
 }
@@ -142,6 +144,7 @@ impl From<Connection> for SanitizedConnection {
             oauth: conn.oauth,
             has_error: conn.has_error,
             error: conn.error,
+            connection_definition_name: None,
             record_metadata: conn.record_metadata,
         }
     }

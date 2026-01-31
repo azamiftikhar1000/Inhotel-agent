@@ -13,6 +13,7 @@ use axum::{
     routing::{delete as axum_delete, get, patch, post},
     Extension, Json, Router,
 };
+use cache::local::LocalCacheExt;
 use chrono::Utc;
 use envconfig::Envconfig;
 use http::HeaderMap;
@@ -50,7 +51,7 @@ use validator::Validate;
 pub fn get_router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/", post(create_connection))
-        .route("/", get(read::<CreateConnectionPayload, Connection>))
+        .route("/", get(get_connections))
         .route("/:id", patch(update_connection))
         .route("/:id", axum_delete(delete_connection))
 }
@@ -65,6 +66,85 @@ pub struct CreateConnectionPayload {
     pub identity_type: Option<ConnectionIdentityType>,
     pub group: Option<String>,
     pub name: Option<String>,
+}
+
+async fn get_connections(
+    headers: HeaderMap,
+    access: Option<Extension<Arc<EventAccess>>>,
+    query: Option<Query<BTreeMap<String, String>>>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ServerResponse<ReadResponse<SanitizedConnection>>>, PicaError> {
+    let mongo_query = shape_mongo_filter(
+        query,
+        access.map(|e| {
+            let Extension(e) = e;
+            e
+        }),
+        Some(headers),
+    );
+
+    let connections = state
+        .app_stores
+        .connection
+        .get_many(
+            Some(mongo_query.filter.clone()),
+            None,
+            None,
+            Some(mongo_query.limit),
+            Some(mongo_query.skip),
+        )
+        .await
+        .map_err(|e| {
+            error!("Error fetching connections: {:?}", e);
+            e
+        })?;
+
+    let mut sanitized_connections = Vec::new();
+
+    for connection in connections {
+        let definition_name = match state
+            .connection_definitions_cache
+            .get_or_insert_with_filter(
+                &connection.connection_definition_id,
+                state.app_stores.connection_config.clone(),
+                doc! {
+                    "_id": connection.connection_definition_id.to_string(),
+                    "deleted": false
+                },
+                None,
+            )
+            .await
+        {
+            Ok(definition) => Some(definition.name.clone()),
+            Err(e) => {
+                error!("Error fetching connection definition: {:?}", e);
+                None
+            }
+        };
+
+        let mut sanitized_connection = SanitizedConnection::from(connection);
+        sanitized_connection.connection_definition_name = definition_name;
+        sanitized_connections.push(sanitized_connection);
+    }
+
+    let total = state
+        .app_stores
+        .connection
+        .count(mongo_query.filter, None)
+        .await
+        .map_err(|e| {
+            error!("Error counting connections: {:?}", e);
+            e
+        })?;
+
+    let response = ReadResponse {
+        rows: sanitized_connections,
+        skip: mongo_query.skip,
+        limit: mongo_query.limit,
+        total,
+    };
+
+    Ok(Json(ServerResponse::new("read", response)))
 }
 
 async fn test_connection(

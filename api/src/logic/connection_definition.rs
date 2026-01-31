@@ -1,4 +1,4 @@
-use super::{create, read, update, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse};
+use super::{create, read, HookExt, PublicExt, ReadResponse, RequestExt, SuccessResponse};
 use crate::{
     helper::shape_mongo_filter,
     router::ServerResponse,
@@ -25,7 +25,7 @@ use osentities::{
     id::{prefix::IdPrefix, Id},
     record_metadata::RecordMetadata,
     settings::Settings,
-    ApplicationError, PicaError,
+    ApplicationError, InternalError, PicaError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -42,7 +42,7 @@ pub fn get_router() -> Router<Arc<AppState>> {
         )
         .route(
             "/:id",
-            patch(update::<CreateRequest, ConnectionDefinition>)
+            patch(update_connection_definition_with_cache_invalidation)
                 .delete(delete_by_connection_definition_id),
         )
 }
@@ -638,4 +638,71 @@ pub async fn get_available_connectors(
     };
 
     Ok(Json(ServerResponse::new("Available Connectors", res)))
+}
+
+use cache::local::LocalCacheExt;
+
+pub async fn update_connection_definition_with_cache_invalidation(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateRequest>,
+) -> Result<Json<ServerResponse<SuccessResponse>>, PicaError> {
+    let mut query = shape_mongo_filter(None, None, None);
+    query.filter.insert("_id", id.clone());
+
+    let store = state.app_stores.connection_config.clone();
+
+    tracing::info!("Starting update for connection definition with id: {}", id);
+
+    let Some(record) = (match store.get_one(query.filter.clone()).await {
+        Ok(ret) => ret,
+        Err(e) => {
+            error!("Error getting record in store: {e}");
+            return Err(e);
+        }
+    }) else {
+        tracing::warn!("Record with id {} not found for update", id);
+        return Err(ApplicationError::not_found(
+            &format!("Record with id {id} not found"),
+            None,
+        ));
+    };
+
+    let record = payload.update(record);
+
+    let bson = bson::to_bson_with_options(&record, Default::default()).map_err(|e| {
+        error!("Could not serialize record into document: {e}");
+        InternalError::serialize_error(e.to_string().as_str(), None)
+    })?;
+
+    let document = doc! {
+        "$set": bson
+    };
+
+    match store.update_one(&id, document).await {
+        Ok(_) => {
+            tracing::info!(
+                "Successfully updated connection definition with id: {}. Invalidating cache.",
+                id
+            );
+            
+            // Invalidate cache
+            if let Ok(obj_id) = id.parse::<Id>() {
+                if let Err(e) = state.connection_definitions_cache.remove(&obj_id).await {
+                     tracing::warn!("Failed to invalidate cache for connection definition {}: {:?}", id, e);
+                }
+            } else {
+                 tracing::warn!("Failed to parse id {} for cache invalidation", id);
+            }
+
+            Ok(Json(ServerResponse::new(
+                "update",
+                SuccessResponse { success: true },
+            )))
+        }
+        Err(e) => {
+            error!("Error updating in store for id {}: {}", id, e);
+            Err(e)
+        }
+    }
 }

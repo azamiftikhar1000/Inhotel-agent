@@ -107,6 +107,10 @@ pub struct ApiResponse<Data: DeserializeOwned = Value> {
 
 impl TestServer {
     pub async fn new(db_name: Option<String>) -> Self {
+        Self::new_with_cache(db_name, None).await
+    }
+
+    pub async fn new_with_cache(db_name: Option<String>, cache_size: Option<String>) -> Self {
         // init tracing once
         TRACING.get_or_init(|| {
             let filter = EnvFilter::builder()
@@ -151,7 +155,7 @@ impl TestServer {
             ),
             ("OPENAI_API_KEY".to_string(), "".to_string()),
             ("MOCK_LLM".to_string(), "true".to_string()),
-            ("CACHE_SIZE".to_string(), "0".to_string()),
+            ("CACHE_SIZE".to_string(), cache_size.unwrap_or_else(|| "0".to_string())),
             ("REDIS_URL".to_string(), redis),
             ("JWT_SECRET".to_string(), token_secret.clone()),
             (
