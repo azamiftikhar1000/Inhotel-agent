@@ -72,7 +72,9 @@ jobs:
             --from-literal=MONGO_URI='${{ secrets.MONGO_URI }}' \
             --from-literal=CONTEXT_DATABASE_URL='${{ secrets.CONTEXT_DATABASE_URL }}' \
             --from-literal=CONTROL_DATABASE_URL='${{ secrets.CONTROL_DATABASE_URL }}' \
+            --from-literal=CONTROL_DATABASE_NAME='${{ secrets.CONTROL_DATABASE_NAME }}' \
             --from-literal=EVENT_DATABASE_URL='${{ secrets.EVENT_DATABASE_URL }}' \
+            --from-literal=EVENT_DATABASE_NAME='${{ secrets.EVENT_DATABASE_NAME }}' \
             --from-literal=MONGO_PASSWORD='${{ secrets.MONGO_PASSWORD }}' \
             --from-literal=MONGO_INITDB_ROOT_USERNAME='${{ secrets.MONGO_INITDB_ROOT_USERNAME }}' \
             --from-literal=GCP_PROJECT_ID='${{ secrets.GCP_PROJECT_ID }}' \
