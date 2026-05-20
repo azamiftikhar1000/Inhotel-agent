@@ -73,6 +73,17 @@ pub struct ConnectionsConfig {
     pub api_version: String,
     #[envconfig(from = "HTTP_CLIENT_TIMEOUT_SECS", default = "30")]
     pub http_client_timeout_secs: u64,
+    /// inHotel-backend URL used to notify on connection lifecycle events
+    /// (so Firestore mirror's `usage_tools_total` refreshes within ~1s
+    /// instead of waiting for the hourly sweeper). Empty disables the
+    /// webhook entirely — the sweeper is still the safety net.
+    #[envconfig(from = "INHOTEL_BACKEND_URL", default = "")]
+    pub inhotel_backend_url: String,
+    /// Shared secret sent in `X-Internal-Secret` header to inHotel-backend.
+    /// Same value as the backend's `INHOTEL_INTERNAL_SECRET` env var.
+    /// Empty disables the webhook (we won't send unauthenticated calls).
+    #[envconfig(from = "INHOTEL_INTERNAL_SECRET", default = "")]
+    pub inhotel_internal_secret: String,
     #[envconfig(nested = true)]
     pub headers: Headers,
     #[envconfig(nested = true)]

@@ -56,6 +56,76 @@ pub fn get_router() -> Router<Arc<AppState>> {
         .route("/:id", axum_delete(delete_connection))
 }
 
+
+/// Fire-and-forget notification to inHotel-backend after a connection
+/// lifecycle event (insert / update / delete). Keeps Firestore mirror's
+/// `usage_tools_total` fresh within ~1s.
+///
+/// Never blocks the caller's response — spawns a tokio task that does
+/// the HTTP POST with a 3s timeout. Errors are logged and swallowed:
+/// the inHotel hourly sweeper is the safety net for any missed call.
+///
+/// No-op when either `inhotel_backend_url` or `inhotel_internal_secret`
+/// is unset (e.g. local dev, integration tests).
+fn notify_inhotel_tools_refresh(
+    state: &Arc<AppState>,
+    user_id: &str,
+    operation: &'static str,
+) {
+    if user_id.is_empty() {
+        return;
+    }
+    if state.config.inhotel_backend_url.is_empty()
+        || state.config.inhotel_internal_secret.is_empty()
+    {
+        // Not configured — skip silently. Sweeper covers tools count.
+        return;
+    }
+
+    let url = format!(
+        "{}/internal/v1/refresh-tools",
+        state.config.inhotel_backend_url.trim_end_matches('/'),
+    );
+    let secret = state.config.inhotel_internal_secret.clone();
+    let user_id = user_id.to_string();
+    let client = state.http_client.clone();
+
+    tokio::spawn(async move {
+        let result = client
+            .post(&url)
+            .header("X-Internal-Secret", secret)
+            .header("Content-Type", "application/json")
+            .timeout(Duration::from_secs(3))
+            .json(&json!({
+                "ownership_user_id": user_id,
+                "operation": operation,
+            }))
+            .send()
+            .await;
+
+        match result {
+            Ok(resp) if resp.status().is_success() => {
+                tracing::debug!(
+                    "inhotel_refresh_tools.ok  user_id={}  op={}",
+                    user_id, operation,
+                );
+            }
+            Ok(resp) => {
+                tracing::warn!(
+                    "inhotel_refresh_tools.bad_status  user_id={}  op={}  status={}",
+                    user_id, operation, resp.status(),
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "inhotel_refresh_tools.error  user_id={}  op={}  error={}",
+                    user_id, operation, e,
+                );
+            }
+        }
+    });
+}
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateConnectionPayload {
@@ -409,6 +479,13 @@ pub async fn create_connection(
             error!("Error creating connection: {:?}", e);
         })?;
 
+    // Notify inHotel-backend so the Firestore mirror's tools count
+    // refreshes within ~1s instead of waiting for the hourly sweeper.
+    // Fire-and-forget — see notify_inhotel_tools_refresh.
+    if let Some(uid) = conn.ownership.user_id.as_ref() {
+        notify_inhotel_tools_refresh(&state, uid.as_str(), "insert");
+    }
+
     Ok(Json(conn.into()))
 }
 
@@ -690,12 +767,19 @@ pub async fn update_connection(
         )
         .await
     {
-        Ok(_) => Ok(Json(ServerResponse::new(
-            "connection",
-            json!({
-                id: connection.id,
-            }),
-        ))),
+        Ok(_) => {
+            // Notify inHotel-backend — `active` / `deleted` toggles via
+            // update affect the tools count. See notify_inhotel_tools_refresh.
+            if let Some(uid) = connection.ownership.user_id.as_ref() {
+                notify_inhotel_tools_refresh(&state, uid.as_str(), "update");
+            }
+            Ok(Json(ServerResponse::new(
+                "connection",
+                json!({
+                    id: connection.id,
+                }),
+            )))
+        }
         Err(e) => {
             error!("Error updating connection: {:?}", e);
 
@@ -723,6 +807,11 @@ pub async fn delete_connection(
             state.k8s_client.delete_all(namespace, service_name).await?;
         }
         _ => (),
+    }
+
+    // Notify inHotel-backend — tools count just dropped.
+    if let Some(uid) = connection.args.ownership.user_id.as_ref() {
+        notify_inhotel_tools_refresh(&state, uid.as_str(), "delete");
     }
 
     Ok(Json(ServerResponse::new(
