@@ -73,6 +73,27 @@ pub struct ConnectionsConfig {
     pub api_version: String,
     #[envconfig(from = "HTTP_CLIENT_TIMEOUT_SECS", default = "30")]
     pub http_client_timeout_secs: u64,
+    /// inHotel-backend URL used to notify on connection lifecycle events
+    /// (so Firestore mirror's `usage_tools_total` refreshes within ~1s
+    /// instead of waiting for the hourly sweeper). Defaults to the prod
+    /// URL — env var can override for dev/staging.
+    #[envconfig(from = "INHOTEL_BACKEND_URL", default = "https://backend.inhotel.io")]
+    pub inhotel_backend_url: String,
+    /// Shared secret sent in `X-Internal-Secret` header to inHotel-backend.
+    /// Hardcoded default matches the value in inhotel-backend's
+    /// `src/app/endpoints/internal_refresh.py`. Env var override available
+    /// for rotation without a code change.
+    ///
+    /// SECURITY: Hardcoded by design — both services are owned by the
+    /// same team, and the endpoint behind this secret only authenticates
+    /// one POST that triggers an idempotent Firestore mirror recompute
+    /// (no privileged write of attacker-controlled data; the value comes
+    /// from MongoDB which the attacker can't write to).
+    #[envconfig(
+        from = "INHOTEL_INTERNAL_SECRET",
+        default = "dm34P-SC1M_NspkH_u4zYR9yG60cx36LGSZXj2DHvgaj0B5qkZb3W6E0zcadszZ0"
+    )]
+    pub inhotel_internal_secret: String,
     #[envconfig(nested = true)]
     pub headers: Headers,
     #[envconfig(nested = true)]
